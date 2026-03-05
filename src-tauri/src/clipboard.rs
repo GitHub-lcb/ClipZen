@@ -1,8 +1,13 @@
 // 剪贴板监听模块
-// TODO: 实现跨平台剪贴板监听
 
 use arboard::Clipboard;
 use std::sync::Mutex;
+
+pub enum ClipboardContent {
+    Text(String),
+    Image(Vec<u8>), // PNG 格式字节
+    Empty,
+}
 
 pub struct ClipboardManager {
     clipboard: Mutex<Option<Clipboard>>,
@@ -27,8 +32,55 @@ impl ClipboardManager {
     pub fn set_text(&self, text: &str) -> Result<(), String> {
         let mut clip = self.clipboard.lock().unwrap();
         if let Some(ref mut c) = *clip {
-            c.set_text(text).map_err(|e| e.to_string())?;
-            Ok(())
+            c.set_text(text).map_err(|e| e.to_string())
+        } else {
+            Err("Clipboard not available".to_string())
+        }
+    }
+
+    /// 获取剪贴板内容（自动检测类型）
+    pub fn get_content(&self) -> ClipboardContent {
+        let mut clip = self.clipboard.lock().unwrap();
+        if let Some(ref mut c) = *clip {
+            // 先尝试获取图片
+            if let Ok(image) = c.get_image() {
+                // 转换为 PNG 格式
+                use image::codecs::png::PngEncoder;
+                use image::ImageEncoder;
+                let mut png_data = Vec::new();
+                let encoder = PngEncoder::new(&mut png_data);
+                let _ = encoder.write_image(
+                    &image.bytes,
+                    image.width as u32,
+                    image.height as u32,
+                    image::ExtendedColorType::Rgba8,
+                );
+                return ClipboardContent::Image(png_data);
+            }
+            // 再尝试获取文本
+            if let Ok(text) = c.get_text() {
+                return ClipboardContent::Text(text);
+            }
+        }
+        ClipboardContent::Empty
+    }
+
+    /// 设置图片到剪贴板
+    pub fn set_image(&self, image_data: &[u8]) -> Result<(), String> {
+        let mut clip = self.clipboard.lock().unwrap();
+        if let Some(ref mut c) = *clip {
+            let img = image::load_from_memory(image_data)
+                .map_err(|e| format!("Failed to load image: {}", e))?;
+            let rgba = img.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            
+            let arboard_image = arboard::ImageData {
+                width: width as usize,
+                height: height as usize,
+                bytes: rgba.to_vec().into(),
+            };
+            
+            c.set_image(arboard_image).map_err(|e| e.to_string())
         } else {
             Err("Clipboard not available".to_string())
         }
