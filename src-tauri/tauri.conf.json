@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.lcb.clipzen",
   "plugins": {
-    "dialog": {}
+    "dialog": null
   },
   "build": {
     "frontendDist": "../dist",
@@ -35,7 +35,11 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/icon.svg"
+    ],
     "category": "Utility",
     "shortDescription": "小安剪贴板 - 快、稳、简单、隐私、离线",
     "longDescription": "ClipZen 是一款本地剪贴板管理工具，自动记录剪贴板历史，支持快速搜索、置顶常用内容，纯本地存储保护隐私。"

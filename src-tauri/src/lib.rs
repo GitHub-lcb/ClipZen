@@ -76,7 +76,11 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
         std::thread::sleep(std::time::Duration::from_millis(500));
         
         if let Some(content) = clipboard.get_text() {
-            if content != last_content && !content.trim().is_empty() {
+            // 检查：不是空内容、与上次不同、且数据库中不存在
+            if content != last_content 
+                && !content.trim().is_empty()
+                && !storage.content_exists(&content).unwrap_or(false) 
+            {
                 last_content = content.clone();
                 
                 // 保存到存储

@@ -4,6 +4,8 @@ use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::Utc;
+use std::path::PathBuf;
+use dirs::data_dir;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClipboardItem {
@@ -23,7 +25,9 @@ pub struct Storage {
 
 impl Storage {
     pub fn new() -> Result<Self> {
-        let conn = Connection::open("clipzen.db")?;
+        // 将数据库存储在用户应用数据目录，避免触发 Tauri 文件监控
+        let db_path = get_database_path();
+        let conn = Connection::open(db_path)?;
         
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clipboard_items (
@@ -163,6 +167,15 @@ impl Storage {
         Ok(())
     }
 
+    /// 检查内容是否已存在
+    pub fn content_exists(&self, content: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*) FROM clipboard_items WHERE content = ?1"
+        )?;
+        let count: i32 = stmt.query_row([content], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
     /// 导入单条记录（用于批量导入）
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
@@ -187,6 +200,23 @@ impl Storage {
 impl Default for Storage {
     fn default() -> Self {
         Self::new().expect("Failed to initialize storage")
+    }
+}
+
+/// 获取数据库文件路径
+fn get_database_path() -> PathBuf {
+    // 优先使用应用数据目录
+    if let Some(data_dir) = data_dir() {
+        let app_dir = data_dir.join("ClipZen");
+        if let Err(e) = std::fs::create_dir_all(&app_dir) {
+            eprintln!("Failed to create app directory: {}", e);
+            // 如果创建失败，回退到当前目录
+            return PathBuf::from("clipzen.db");
+        }
+        app_dir.join("clipzen.db")
+    } else {
+        // 如果无法获取应用数据目录，使用当前目录
+        PathBuf::from("clipzen.db")
     }
 }
 
