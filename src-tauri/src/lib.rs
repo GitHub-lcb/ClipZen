@@ -54,8 +54,8 @@ pub fn run() {
                 start_clipboard_listener(clipboard_handle);
             });
 
-            // 注册全局快捷键
-            use tauri_plugin_global_shortcut::{Shortcut, Modifiers};
+            // 注册全局快捷键 - 显示/隐藏窗口
+            use tauri_plugin_global_shortcut::{Shortcut, Modifiers, ShortcutState};
             
             #[cfg(target_os = "macos")]
             let shortcut = Shortcut::new(Some(Modifiers::SHIFT | Modifiers::SUPER), tauri_plugin_global_shortcut::Code::KeyV);
@@ -63,7 +63,12 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let shortcut = Shortcut::new(Some(Modifiers::SHIFT | Modifiers::CONTROL), tauri_plugin_global_shortcut::Code::KeyV);
 
-            let _ = app.global_shortcut().register(shortcut);
+            let app_handle = app.handle().clone();
+            let _ = app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    window::toggle_window_visibility(&app_handle);
+                }
+            });
 
             Ok(())
         })
@@ -75,6 +80,7 @@ pub fn run() {
 fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
     let clipboard = ClipboardManager::new();
     let storage = Storage::new().expect("Failed to init storage");
+    let settings = SettingsManager::new();
     let mut last_content = String::new();
 
     loop {
@@ -90,6 +96,10 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
                 
                 // 保存到存储
                 let _ = storage.save_clipboard_item(&content);
+                
+                // 清理超出限制的旧记录
+                let max_items = settings.load().max_history_items;
+                let _ = storage.cleanup_old_items(max_items);
                 
                 // 通知前端更新
                 let _ = handle.emit("clipboard-updated", ());

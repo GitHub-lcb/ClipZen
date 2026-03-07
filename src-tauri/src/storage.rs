@@ -80,6 +80,30 @@ impl Storage {
         Ok(id)
     }
 
+    /// 清理超出限制的旧记录（保留置顶）
+    pub fn cleanup_old_items(&self, max_items: u32) -> Result<usize> {
+        // 获取非置顶记录数量
+        let count: i32 = self.conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_items WHERE pinned = 0",
+            [],
+            |row| row.get(0)
+        )?;
+        
+        if count <= max_items as i32 {
+            return Ok(0);
+        }
+        
+        // 删除最旧的非置顶记录
+        let delete_count = count - max_items as i32;
+        self.conn.execute(
+            "DELETE FROM clipboard_items WHERE id IN (
+                SELECT id FROM clipboard_items WHERE pinned = 0 
+                ORDER BY created_at ASC LIMIT ?1
+            )",
+            [delete_count],
+        )
+    }
+
     /// 保存图片剪贴板
     pub fn save_image_item(&self, image_data: &[u8], preview_base64: &str, file_path: &str) -> Result<String> {
         let id = Uuid::new_v4().to_string();
