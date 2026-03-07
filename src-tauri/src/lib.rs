@@ -1,4 +1,6 @@
 use tauri::Emitter;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 use std::sync::{Arc, Mutex};
 
 mod clipboard;
@@ -25,9 +27,9 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .manage(clipboard)
-        .manage(storage)
-        .manage(settings)
+        .manage(clipboard.clone())
+        .manage(storage.clone())
+        .manage(settings.clone())
         .invoke_handler(tauri::generate_handler![
             commands::get_clipboard_history,
             commands::save_to_history,
@@ -70,6 +72,39 @@ pub fn run() {
                 }
             });
 
+            // 创建系统托盘
+            let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>).unwrap();
+            let hide_item = MenuItem::with_id(app, "hide", "隐藏窗口", true, None::<&str>).unwrap();
+            let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>).unwrap();
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>).unwrap();
+            
+            let menu = Menu::with_items(app, &[&show_item, &hide_item, &settings_item, &quit_item]).unwrap();
+            
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            window::show_window(app);
+                        }
+                        "hide" => {
+                            window::hide_window(app);
+                        }
+                        "settings" => {
+                            window::show_window(app);
+                            let _ = app.emit("open-settings", ());
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)
+                .unwrap();
+
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -87,21 +122,14 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
         std::thread::sleep(std::time::Duration::from_millis(500));
         
         if let Some(content) = clipboard.get_text() {
-            // 检查：不是空内容、与上次不同、且数据库中不存在
             if content != last_content 
                 && !content.trim().is_empty()
                 && !storage.content_exists(&content).unwrap_or(false) 
             {
                 last_content = content.clone();
-                
-                // 保存到存储
                 let _ = storage.save_clipboard_item(&content);
-                
-                // 清理超出限制的旧记录
                 let max_items = settings.load().max_history_items;
                 let _ = storage.cleanup_old_items(max_items);
-                
-                // 通知前端更新
                 let _ = handle.emit("clipboard-updated", ());
             }
         }

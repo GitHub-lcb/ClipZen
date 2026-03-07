@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "ClipZen",
+    "subtitle": "小安剪贴板"
+  },
+  "search": {
+    "placeholder": "搜索剪贴板历史...",
+    "shortcut": "Ctrl+F"
+  },
+  "pinned": {
+    "title": "常用片段"
+  },
+  "recent": {
+    "title": "最近记录",
+    "empty": "暂无记录",
+    "emptyHint": "复制内容后会自动记录在这里"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{n}分钟前",
+    "hoursAgo": "{n}小时前",
+    "daysAgo": "{n}天前"
+  },
+  "actions": {
+    "copy": "复制",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "delete": "删除",
+    "confirm": "确认",
+    "cancel": "取消",
+    "copied": "已复制"
+  },
+  "tags": {
+    "all": "全部",
+    "addTag": "添加标签"
+  },
+  "settings": {
+    "title": "设置",
+    "general": "通用",
+    "maxHistoryItems": "最大历史记录数",
+    "autoClear": "自动清理（天数，0=不清理）",
+    "theme": "主题",
+    "themeSystem": "跟随系统",
+    "themeLight": "浅色",
+    "themeDark": "暗色",
+    "language": "语言",
+    "startup": "启动",
+    "startOnBoot": "开机自动启动",
+    "startOnBootHint": "需要保存设置后生效",
+    "showInTray": "显示系统托盘图标",
+    "hotkeys": "快捷键",
+    "hotkeyShow": "显示/隐藏窗口",
+    "hotkeyCopy": "快速复制",
+    "reset": "重置为默认",
+    "save": "保存",
+    "saving": "保存中...",
+    "saved": "设置已保存",
+    "loadFailed": "加载设置失败",
+    "saveFailed": "保存设置失败"
+  },
+  "dataManager": {
+    "title": "数据管理",
+    "export": "导出数据",
+    "exportHint": "导出剪贴板历史到 JSON 文件",
+    "exporting": "导出中...",
+    "exportSuccess": "已导出 {n} 条记录",
+    "import": "导入数据",
+    "importHint": "从 JSON 文件恢复剪贴板历史",
+    "importing": "导入中...",
+    "importSuccess": "已导入 {n} 条记录",
+    "clear": "清空数据",
+    "clearHint": "删除所有剪贴板历史记录",
+    "keepPinned": "保留置顶记录",
+    "clearing": "清空中...",
+    "clearSuccess": "已删除 {n} 条记录",
+    "clearFailed": "清空失败"
+  },
+  "tray": {
+    "show": "显示窗口",
+    "hide": "隐藏窗口",
+    "settings": "设置",
+    "quit": "退出"
+  },
+  "status": {
+    "total": "共 {n} 条记录",
+    "showing": "已显示 {n} 条"
+  },
+  "keyboard": {
+    "navigate": "↑↓导航",
+    "copy": "Enter复制",
+    "delete": "Del删除"
+  },
+  "image": {
+    "label": "图片"
+  }
+}

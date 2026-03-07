@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "ClipZen",
+    "subtitle": "Clipboard Manager"
+  },
+  "search": {
+    "placeholder": "Search clipboard history...",
+    "shortcut": "Ctrl+F"
+  },
+  "pinned": {
+    "title": "Pinned"
+  },
+  "recent": {
+    "title": "Recent",
+    "empty": "No records",
+    "emptyHint": "Copy something and it will appear here"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{n} min ago",
+    "hoursAgo": "{n} hr ago",
+    "daysAgo": "{n} days ago"
+  },
+  "actions": {
+    "copy": "Copy",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "copied": "Copied"
+  },
+  "tags": {
+    "all": "All",
+    "addTag": "Add tag"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "maxHistoryItems": "Max history items",
+    "autoClear": "Auto clear (days, 0=disabled)",
+    "theme": "Theme",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "language": "Language",
+    "startup": "Startup",
+    "startOnBoot": "Start on boot",
+    "startOnBootHint": "Save settings to apply",
+    "showInTray": "Show system tray icon",
+    "hotkeys": "Hotkeys",
+    "hotkeyShow": "Show/hide window",
+    "hotkeyCopy": "Quick copy",
+    "reset": "Reset to defaults",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Settings saved",
+    "loadFailed": "Failed to load settings",
+    "saveFailed": "Failed to save settings"
+  },
+  "dataManager": {
+    "title": "Data Manager",
+    "export": "Export Data",
+    "exportHint": "Export clipboard history to JSON",
+    "exporting": "Exporting...",
+    "exportSuccess": "Exported {n} records",
+    "import": "Import Data",
+    "importHint": "Import clipboard history from JSON",
+    "importing": "Importing...",
+    "importSuccess": "Imported {n} records",
+    "clear": "Clear Data",
+    "clearHint": "Delete all clipboard history",
+    "keepPinned": "Keep pinned records",
+    "clearing": "Clearing...",
+    "clearSuccess": "Deleted {n} records",
+    "clearFailed": "Clear failed"
+  },
+  "tray": {
+    "show": "Show Window",
+    "hide": "Hide Window",
+    "settings": "Settings",
+    "quit": "Quit"
+  },
+  "status": {
+    "total": "{n} records total",
+    "showing": "Showing {n}"
+  },
+  "keyboard": {
+    "navigate": "↑↓ Navigate",
+    "copy": "Enter Copy",
+    "delete": "Del Delete"
+  },
+  "image": {
+    "label": "Image"
+  }
+}
