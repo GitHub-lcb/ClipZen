@@ -49,6 +49,17 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("save_settings", { newSettings: settings });
       setSavedSettings(settings);
+      
+      // 如果主题有变化，立即应用
+      const root = document.documentElement;
+      root.classList.remove("light", "dark");
+      if (settings.theme === "system") {
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        root.classList.add(systemDark ? "dark" : "light");
+      } else {
+        root.classList.add(settings.theme);
+      }
+      
       setMessage({ type: 'success', text: '设置已保存' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
@@ -174,6 +185,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                 />
                 <span className="text-sm text-gray-600 dark:text-gray-300">开机自动启动</span>
               </label>
+              <p className="text-xs text-gray-500 ml-6">需要保存设置后生效</p>
 
               <label className="flex items-center gap-2 cursor-pointer">
                 <input

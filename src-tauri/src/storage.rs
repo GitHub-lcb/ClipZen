@@ -195,6 +195,41 @@ impl Storage {
         )?;
         Ok(())
     }
+
+    /// 自动清理过期记录
+    pub fn auto_cleanup(&self, days: u32) -> Result<usize> {
+        if days == 0 {
+            return Ok(0);
+        }
+        
+        let cutoff_timestamp = Utc::now().timestamp_millis() - (days as i64 * 24 * 60 * 60 * 1000);
+        
+        // 先获取要删除的记录（用于删除文件）
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path FROM clipboard_items WHERE created_at < ?1 AND pinned = 0"
+        )?;
+        let items_to_delete: Vec<(String, Option<String>)> = stmt
+            .query_map([cutoff_timestamp.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        
+        // 删除文件
+        for (_, file_path) in &items_to_delete {
+            if let Some(path) = file_path {
+                std::fs::remove_file(path).ok();
+            }
+        }
+        
+        // 删除数据库记录
+        let deleted = self.conn.execute(
+            "DELETE FROM clipboard_items WHERE created_at < ?1 AND pinned = 0",
+            [cutoff_timestamp.to_string()],
+        )?;
+        
+        Ok(deleted)
+    }
 }
 
 impl Default for Storage {

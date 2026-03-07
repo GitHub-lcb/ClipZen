@@ -118,9 +118,32 @@ pub fn get_settings(settings: State<Arc<Mutex<SettingsManager>>>) -> AppSettings
 pub fn save_settings(
     new_settings: AppSettings,
     settings: State<Arc<Mutex<SettingsManager>>>,
+    storage: State<Arc<Mutex<Storage>>>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let settings = settings.lock().unwrap();
-    settings.save(&new_settings)
+    settings.save(&new_settings)?;
+    
+    // 处理开机自启设置
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if new_settings.start_on_boot {
+        manager.enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+    } else {
+        manager.disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+    }
+    
+    // 处理自动清理
+    if new_settings.auto_clear_after_days > 0 {
+        let storage = storage.lock().unwrap();
+        let deleted = storage.auto_cleanup(new_settings.auto_clear_after_days)
+            .map_err(|e| format!("Failed to cleanup: {}", e))?;
+        println!("Auto-cleanup: deleted {} items", deleted);
+    }
+    
+    Ok(())
 }
 
 /// 导出剪贴板历史到 JSON 文件
@@ -260,6 +283,26 @@ pub fn get_items_by_tag(
     } else {
         Vec::new()
     }
+}
+
+/// 设置开机自启
+#[tauri::command]
+pub fn set_autostart(
+    enabled: bool,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    
+    let manager = app.autolaunch();
+    if enabled {
+        manager.enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+    } else {
+        manager.disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+    }
+    
+    Ok(())
 }
 
 #[allow(dead_code)]

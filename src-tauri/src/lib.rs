@@ -21,6 +21,10 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(clipboard)
         .manage(storage)
         .manage(settings)
@@ -41,6 +45,7 @@ pub fn run() {
             commands::add_tag_to_item,
             commands::remove_tag_from_item,
             commands::get_items_by_tag,
+            commands::set_autostart,
         ])
         .setup(|app| {
             // 启动剪贴板监听

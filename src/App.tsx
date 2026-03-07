@@ -192,6 +192,7 @@ function App() {
                 onCopy={() => handleItemClick(item)}
                 onPin={() => togglePin(item.id)}
                 onDelete={() => deleteItem(item.id)}
+                onTagsUpdated={refresh}
               />
             ))}
           </div>
@@ -257,15 +258,22 @@ function ItemCard({
   onPreview, 
   onCopy, 
   onPin, 
-  onDelete 
+  onDelete,
+  onTagsUpdated
 }: { 
   item: ClipboardItem;
   onPreview: (item: ClipboardItem) => void;
   onCopy: () => void;
   onPin: () => void;
   onDelete: () => void;
+  onTagsUpdated: () => void;
 }) {
   const [tags, setTags] = useState<string[]>(item.tags || []);
+
+  const handleTagsChange = (newTags: string[]) => {
+    setTags(newTags);
+    onTagsUpdated();
+  };
 
   return (
     <div
@@ -283,16 +291,14 @@ function ItemCard({
             <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3">{item.content}</p>
           )}
           
-          {/* 标签区域 */}
-          {tags.length > 0 && (
-            <div className="mt-2">
-              <TagManager 
-                itemId={item.id} 
-                currentTags={tags} 
-                onTagsChange={setTags} 
-              />
-            </div>
-          )}
+          {/* 标签区域 - 始终显示 */}
+          <div className="mt-2">
+            <TagManager 
+              itemId={item.id} 
+              currentTags={tags} 
+              onTagsChange={handleTagsChange} 
+            />
+          </div>
         </div>
         
         <div className="flex items-center gap-1 flex-shrink-0">
