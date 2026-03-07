@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2 } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TagManager } from "./components/TagManager";
@@ -11,7 +11,11 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dataManagerOpen, setDataManagerOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const { items, loading, copyToClipboard, deleteItem, togglePin, refresh } = useClipboard();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // 获取所有标签
   const allTags = useMemo(() => {
@@ -26,14 +30,12 @@ function App() {
   const filteredItems = useMemo(() => {
     let result = items;
     
-    // 标签过滤
     if (selectedTag) {
       result = result.filter(item => 
         (item.tags || []).includes(selectedTag)
       );
     }
     
-    // 搜索过滤
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(item =>
@@ -49,17 +51,91 @@ function App() {
 
   const pinnedItems = filteredItems.filter(item => item.pinned);
   const recentItems = filteredItems.filter(item => !item.pinned);
+  const allFilteredItems = [...pinnedItems, ...recentItems];
 
-  const handleItemClick = async (item: ClipboardItem) => {
-    if (item.item_type === "image") {
-      // 图片：复制到剪贴板
-      if (item.file_path) {
-        await copyToClipboard(item.content, "image", item.file_path);
+  // 键盘快捷键
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + F 聚焦搜索
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
       }
+      
+      // 上下键导航
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.min(prev + 1, allFilteredItems.length - 1));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      
+      // Enter 复制选中项
+      if (e.key === 'Enter' && selectedIndex >= 0) {
+        e.preventDefault();
+        const item = allFilteredItems[selectedIndex];
+        if (item) handleCopyWithFeedback(item);
+        return;
+      }
+      
+      // Delete 删除选中项
+      if (e.key === 'Delete' && selectedIndex >= 0) {
+        e.preventDefault();
+        const item = allFilteredItems[selectedIndex];
+        if (item) setDeleteConfirmId(item.id);
+        return;
+      }
+      
+      // Escape 取消
+      if (e.key === 'Escape') {
+        setDeleteConfirmId(null);
+        setPreviewImage(null);
+        setSelectedIndex(-1);
+        return;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [allFilteredItems, selectedIndex]);
+
+  // 复制并显示反馈
+  const handleCopyWithFeedback = async (item: ClipboardItem) => {
+    if (item.item_type === "image" && item.file_path) {
+      await copyToClipboard(item.content, "image", item.file_path);
     } else {
-      // 文本：复制到剪贴板
       await copyToClipboard(item.content);
     }
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  // 删除确认
+  const handleDeleteConfirm = async (id: string) => {
+    await deleteItem(id);
+    setDeleteConfirmId(null);
+    setSelectedIndex(-1);
+  };
+
+  // 格式化时间
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    if (diffHours < 24) return `${diffHours}小时前`;
+    if (diffDays < 7) return `${diffDays}天前`;
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
   const handleImagePreview = (item: ClipboardItem) => {
@@ -70,7 +146,8 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-900">
+      <div className="flex flex-col items-center justify-center h-screen bg-white dark:bg-gray-900 gap-3">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
         <div className="text-gray-500">加载中...</div>
       </div>
     );
@@ -100,23 +177,24 @@ function App() {
       <div className="flex items-center gap-2 p-3 border-b border-gray-200 dark:border-gray-700">
         <Search className="w-4 h-4 text-gray-400" />
         <input
+          ref={searchInputRef}
           type="text"
-          placeholder="搜索剪贴板历史..."
+          placeholder="搜索剪贴板历史... (Ctrl+F)"
           className="flex-1 bg-transparent outline-none text-gray-700 dark:text-gray-200"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(-1); }}
         />
         <div className="flex items-center gap-1">
           <button
             onClick={() => setDataManagerOpen(true)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
             title="数据管理"
           >
             <Database className="w-4 h-4 text-gray-500" />
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
             title="设置"
           >
             <SettingsIcon className="w-4 h-4 text-gray-500" />
@@ -142,12 +220,21 @@ function App() {
             <span>常用片段</span>
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {pinnedItems.map(item => (
+            {pinnedItems.map((item, idx) => (
               <div
                 key={item.id}
-                onClick={() => item.item_type === "image" ? handleImagePreview(item) : handleItemClick(item)}
-                className="aspect-square bg-blue-50 dark:bg-blue-900/20 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 flex items-center justify-center relative group"
+                onClick={() => handleCopyWithFeedback(item)}
+                className={`aspect-square rounded cursor-pointer flex items-center justify-center relative group transition-all ${
+                  selectedIndex === idx 
+                    ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' 
+                    : 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                }`}
               >
+                {copiedId === item.id && (
+                  <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded">
+                    <Check className="w-6 h-6 text-green-500" />
+                  </div>
+                )}
                 {item.item_type === "image" ? (
                   <img src={item.preview} alt="图片" className="w-full h-full object-cover rounded" />
                 ) : (
@@ -155,7 +242,7 @@ function App() {
                 )}
                 <button
                   onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
-                  className="absolute top-1 right-1 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100"
+                  className="absolute top-1 right-1 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Pin className="w-3 h-3" />
                 </button>
@@ -174,27 +261,113 @@ function App() {
 
       {/* 历史记录列表 */}
       <div className="flex-1 overflow-y-auto p-3">
-        <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
-          <Clipboard className="w-3 h-3" />
-          <span>最近记录</span>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Clipboard className="w-3 h-3" />
+            <span>最近记录</span>
+          </div>
+          <span className="text-xs text-gray-400">↑↓导航 Enter复制 Del删除</span>
         </div>
         {recentItems.length === 0 ? (
-          <div className="text-center text-gray-400 text-sm py-8">
-            暂无记录，复制点内容试试
+          <div className="text-center py-12">
+            <Clipboard className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm">暂无记录</p>
+            <p className="text-gray-300 dark:text-gray-600 text-xs mt-1">复制内容后会自动记录在这里</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {recentItems.map(item => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                onPreview={handleImagePreview}
-                onCopy={() => handleItemClick(item)}
-                onPin={() => togglePin(item.id)}
-                onDelete={() => deleteItem(item.id)}
-                onTagsUpdated={refresh}
-              />
-            ))}
+            {recentItems.map((item, idx) => {
+              const globalIdx = pinnedItems.length + idx;
+              const isSelected = selectedIndex === globalIdx;
+              const showDeleteConfirm = deleteConfirmId === item.id;
+              
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => item.item_type === "image" ? handleImagePreview(item) : handleCopyWithFeedback(item)}
+                  className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                    isSelected 
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500' 
+                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      {item.item_type === "image" ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                          <ImageIcon className="w-4 h-4" />
+                          <span>图片</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3">{item.content}</p>
+                      )}
+                      
+                      {/* 时间显示 */}
+                      <div className="flex items-center gap-1 mt-2 text-xs text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        <span>{formatTime(item.created_at)}</span>
+                      </div>
+                      
+                      {/* 标签区域 */}
+                      <div className="mt-2">
+                        <TagManager 
+                          itemId={item.id} 
+                          currentTags={item.tags || []} 
+                          onTagsChange={() => refresh()} 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {/* 复制成功指示器 */}
+                      {copiedId === item.id && (
+                        <span className="flex items-center gap-1 text-xs text-green-500 px-2">
+                          <Check className="w-3 h-3" />
+                          已复制
+                        </span>
+                      )}
+                      
+                      <button
+                        onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
+                        className={`p-1.5 rounded-full transition-colors ${
+                          item.pinned 
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-500' 
+                            : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-500'
+                        }`}
+                        title="置顶"
+                      >
+                        <Pin className="w-4 h-4" />
+                      </button>
+                      
+                      {showDeleteConfirm ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteConfirm(item.id); }}
+                            className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                          >
+                            确认
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}
+                            className="px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                          >
+                            取消
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }}
+                          className="p-1.5 text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 rounded-full transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -217,14 +390,15 @@ function TagFilter({
   selectedTag: string | null;
   onSelectTag: (tag: string | null) => void;
 }) {
+  if (allTags.length === 0) return null;
+  
   return (
     <div className="flex items-center gap-2 p-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
       <Tag className="w-4 h-4 text-gray-400 flex-shrink-0" />
       
-      {/* 全部标签 */}
       <button
         onClick={() => onSelectTag(null)}
-        className={`px-2 py-1 text-xs rounded whitespace-nowrap ${
+        className={`px-2 py-1 text-xs rounded whitespace-nowrap transition-colors ${
           selectedTag === null
             ? 'bg-blue-500 text-white'
             : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -233,12 +407,11 @@ function TagFilter({
         全部
       </button>
       
-      {/* 标签列表 */}
-      {allTags.map(tag => (
+      {allTags.slice(0, 10).map(tag => (
         <button
           key={tag}
           onClick={() => onSelectTag(tag === selectedTag ? null : tag)}
-          className={`px-2 py-1 text-xs rounded whitespace-nowrap flex items-center gap-1 ${
+          className={`px-2 py-1 text-xs rounded whitespace-nowrap flex items-center gap-1 transition-colors ${
             tag === selectedTag
               ? 'bg-blue-500 text-white'
               : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
@@ -248,80 +421,10 @@ function TagFilter({
           {tag}
         </button>
       ))}
-    </div>
-  );
-}
-
-// 项目卡片组件
-function ItemCard({ 
-  item, 
-  onPreview, 
-  onCopy, 
-  onPin, 
-  onDelete,
-  onTagsUpdated
-}: { 
-  item: ClipboardItem;
-  onPreview: (item: ClipboardItem) => void;
-  onCopy: () => void;
-  onPin: () => void;
-  onDelete: () => void;
-  onTagsUpdated: () => void;
-}) {
-  const [tags, setTags] = useState<string[]>(item.tags || []);
-
-  const handleTagsChange = (newTags: string[]) => {
-    setTags(newTags);
-    onTagsUpdated();
-  };
-
-  return (
-    <div
-      className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md transition-all"
-      onClick={() => item.item_type === "image" ? onPreview(item) : onCopy()}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          {item.item_type === "image" ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-              <ImageIcon className="w-4 h-4" />
-              <span>图片</span>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3">{item.content}</p>
-          )}
-          
-          {/* 标签区域 - 始终显示 */}
-          <div className="mt-2">
-            <TagManager 
-              itemId={item.id} 
-              currentTags={tags} 
-              onTagsChange={handleTagsChange} 
-            />
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={(e) => { e.stopPropagation(); onPin(); }}
-            className={`p-1.5 rounded-full transition-colors ${
-              item.pinned 
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-500' 
-                : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-500'
-            }`}
-            title="置顶"
-          >
-            <Pin className="w-4 h-4" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1.5 text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 rounded-full transition-colors"
-            title="删除"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+      
+      {allTags.length > 10 && (
+        <span className="text-xs text-gray-400">+{allTags.length - 10}</span>
+      )}
     </div>
   );
 }
