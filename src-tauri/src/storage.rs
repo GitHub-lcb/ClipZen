@@ -15,6 +15,7 @@ pub struct ClipboardItem {
     pub preview: String,   // 文本预览或图片缩略图 base64
     pub pinned: bool,
     pub created_at: i64,
+    pub updated_at: Option<i64>, // 最后更新时间
     pub file_path: Option<String>, // 图片/文件存储路径
     pub tags: Vec<String>,  // 标签列表
 }
@@ -52,6 +53,12 @@ impl Storage {
         // 添加 tags 列（如果不存在）
         conn.execute(
             "ALTER TABLE clipboard_items ADD COLUMN tags TEXT",
+            [],
+        ).ok();
+
+        // 添加 updated_at 列（如果不存在）
+        conn.execute(
+            "ALTER TABLE clipboard_items ADD COLUMN updated_at INTEGER",
             [],
         ).ok();
 
@@ -128,9 +135,10 @@ impl Storage {
     #[allow(dead_code)]
     pub fn save_item(&self, item: &ClipboardItem) -> Result<()> {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
+        let updated_at = item.updated_at.map(|t| t.to_string()).unwrap_or_default();
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             [
                 &item.id,
                 &item.item_type,
@@ -140,6 +148,7 @@ impl Storage {
                 &item.created_at.to_string(),
                 &item.file_path.clone().unwrap_or_default(),
                 &tags_json,
+                &updated_at,
             ],
         )?;
         Ok(())
@@ -147,7 +156,7 @@ impl Storage {
 
     pub fn get_all_items(&self) -> Result<Vec<ClipboardItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, item_type, content, preview, pinned, created_at, file_path, tags 
+            "SELECT id, item_type, content, preview, pinned, created_at, file_path, tags, updated_at 
              FROM clipboard_items 
              ORDER BY created_at DESC"
         )?;
@@ -155,6 +164,7 @@ impl Storage {
         let items = stmt.query_map([], |row| {
             let tags_str: String = row.get(7)?;
             let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+            let updated_at: Option<i64> = row.get(8).ok();
             
             Ok(ClipboardItem {
                 id: row.get(0)?,
@@ -164,6 +174,7 @@ impl Storage {
                 pinned: row.get::<_, i32>(4)? == 1,
                 created_at: row.get(5)?,
                 file_path: row.get(6)?,
+                updated_at,
                 tags,
             })
         })?;

@@ -9,6 +9,7 @@ export interface ClipboardItem {
   preview: string;
   pinned: boolean;
   created_at: number;
+  updated_at?: number;
   file_path?: string;
   tags?: string[];
 }

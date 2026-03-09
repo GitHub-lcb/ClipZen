@@ -1,1 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect fill="#4A90D9" width="32" height="32" rx="6"/><path fill="#FFF" d="M8 8h16v2H8zm0 6h16v2H8zm0 6h10v2H8z"/></svg>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)" />
+  
+  <!-- Clipboard base -->
+  <rect x="160" y="120" width="192" height="280" rx="16" fill="white"/>
+  
+  <!-- Clipboard clip -->
+  <rect x="200" y="100" width="112" height="40" rx="8" fill="#64748b"/>
+  <rect x="220" y="90" width="72" height="20" rx="4" fill="#475569"/>
+  
+  <!-- Clipboard content lines -->
+  <rect x="190" y="180" width="132" height="16" rx="4" fill="#e2e8f0"/>
+  <rect x="190" y="210" width="100" height="16" rx="4" fill="#e2e8f0"/>
+  <rect x="190" y="240" width="120" height="16" rx="4" fill="#e2e8f0"/>
+  <rect x="190" y="270" width="80" height="16" rx="4" fill="#e2e8f0"/>
+  
+  <!-- Zen circle (enso) -->
+  <circle cx="320" cy="340" r="50" stroke="#3b82f6" stroke-width="8" fill="none" stroke-linecap="round" 
+          stroke-dasharray="280 20" transform="rotate(-45 320 340)"/>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+</svg>

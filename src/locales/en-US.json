@@ -92,5 +92,16 @@
   },
   "image": {
     "label": "Image"
+  },
+  "detail": {
+    "title": "Details",
+    "content": "Content",
+    "tags": "Tags",
+    "edit": "Edit",
+    "save": "Save",
+    "saving": "Saving...",
+    "sensitiveDetected": "Sensitive data detected",
+    "maskSensitive": "Mask",
+    "showOriginal": "Show original"
   }
 }

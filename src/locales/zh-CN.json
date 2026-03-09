@@ -92,5 +92,16 @@
   },
   "image": {
     "label": "图片"
+  },
+  "detail": {
+    "title": "详情",
+    "content": "内容",
+    "tags": "标签",
+    "edit": "编辑",
+    "save": "保存",
+    "saving": "保存中...",
+    "sensitiveDetected": "检测到敏感信息",
+    "maskSensitive": "脱敏",
+    "showOriginal": "显示原文"
   }
 }

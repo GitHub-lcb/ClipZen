@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2 } from "lucide-react";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2, Info } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { useI18n } from "./hooks/useI18n";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TagManager } from "./components/TagManager";
 import { DataManager } from "./components/DataManager";
+import { ItemDetail } from "./components/ItemDetail";
 
 function App() {
   const { t, locale } = useI18n();
@@ -12,6 +13,7 @@ function App() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dataManagerOpen, setDataManagerOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<ClipboardItem | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -80,6 +82,7 @@ function App() {
       if (e.key === 'Escape') {
         setDeleteConfirmId(null);
         setPreviewImage(null);
+        setDetailItem(null);
         setSelectedIndex(-1);
         return;
       }
@@ -167,6 +170,7 @@ function App() {
 
       <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} t={t} locale={locale} />
       <DataManager isOpen={dataManagerOpen} onClose={() => setDataManagerOpen(false)} onRefresh={refresh} t={t} />
+      {detailItem && <ItemDetail item={detailItem} onClose={() => setDetailItem(null)} onUpdate={refresh} t={t} />}
 
       {pinnedItems.length > 0 && (
         <div className="p-3 border-b border-gray-200 dark:border-gray-700">
@@ -258,6 +262,9 @@ function App() {
                           {t('actions.copied')}
                         </span>
                       )}
+                      <button onClick={(e) => { e.stopPropagation(); setDetailItem(item); }} className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 rounded-full transition-colors" title={t('detail.title')}>
+                        <Info className="w-4 h-4" />
+                      </button>
                       <button onClick={(e) => { e.stopPropagation(); togglePin(item.id); }} className={`p-1.5 rounded-full transition-colors ${item.pinned ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-500' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-blue-500'}`} title={t('actions.pin')}>
                         <Pin className="w-4 h-4" />
                       </button>

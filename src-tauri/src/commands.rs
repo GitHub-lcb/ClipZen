@@ -271,6 +271,27 @@ pub fn remove_tag_from_item(
     Ok(())
 }
 
+/// 更新记录内容
+#[tauri::command]
+pub fn update_item_content(
+    item_id: String,
+    content: String,
+    storage: State<Arc<Mutex<Storage>>>,
+) -> Result<(), String> {
+    let storage = storage.lock().unwrap();
+    let items = storage.get_all_items().map_err(|e| e.to_string())?;
+    
+    if let Some(mut item) = items.into_iter().find(|i| i.id == item_id) {
+        item.content = content.clone();
+        // 更新预览（取前100字符）
+        item.preview = content.chars().take(100).collect();
+        item.updated_at = Some(chrono::Utc::now().timestamp_millis());
+        storage.save_item(&item).map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}
+
 /// 按标签过滤记录
 #[tauri::command]
 pub fn get_items_by_tag(

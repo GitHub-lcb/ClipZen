@@ -46,6 +46,7 @@ pub fn run() {
             commands::get_all_tags,
             commands::add_tag_to_item,
             commands::remove_tag_from_item,
+            commands::update_item_content,
             commands::get_items_by_tag,
             commands::set_autostart,
         ])
