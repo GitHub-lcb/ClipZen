@@ -1,29 +1,50 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background circle -->
-  <circle cx="256" cy="256" r="240" fill="url(#gradient)" />
-  
-  <!-- Clipboard base -->
-  <rect x="160" y="120" width="192" height="280" rx="16" fill="white"/>
-  
-  <!-- Clipboard clip -->
-  <rect x="200" y="100" width="112" height="40" rx="8" fill="#64748b"/>
-  <rect x="220" y="90" width="72" height="20" rx="4" fill="#475569"/>
-  
-  <!-- Clipboard content lines -->
-  <rect x="190" y="180" width="132" height="16" rx="4" fill="#e2e8f0"/>
-  <rect x="190" y="210" width="100" height="16" rx="4" fill="#e2e8f0"/>
-  <rect x="190" y="240" width="120" height="16" rx="4" fill="#e2e8f0"/>
-  <rect x="190" y="270" width="80" height="16" rx="4" fill="#e2e8f0"/>
-  
-  <!-- Zen circle (enso) -->
-  <circle cx="320" cy="340" r="50" stroke="#3b82f6" stroke-width="8" fill="none" stroke-linecap="round" 
-          stroke-dasharray="280 20" transform="rotate(-45 320 340)"/>
-  
-  <!-- Gradient definition -->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#A855F7"/>
     </linearGradient>
+    <linearGradient id="cardGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8FAFC"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#1E1B4B" flood-opacity="0.25"/>
+    </filter>
+    <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
   </defs>
+  
+  <circle cx="512" cy="512" r="480" fill="url(#bgGradient)"/>
+  
+  <g filter="url(#shadow)">
+    <rect x="288" y="200" width="448" height="624" rx="32" fill="url(#cardGradient)"/>
+  </g>
+  
+  <rect x="368" y="160" width="288" height="80" rx="16" fill="#475569"/>
+  <rect x="416" y="136" width="192" height="48" rx="12" fill="#334155"/>
+  <rect x="440" y="152" width="144" height="16" rx="8" fill="#64748B"/>
+  
+  <rect x="352" y="320" width="320" height="32" rx="8" fill="#E2E8F0"/>
+  <rect x="352" y="376" width="256" height="32" rx="8" fill="#E2E8F0"/>
+  <rect x="352" y="432" width="288" height="32" rx="8" fill="#E2E8F0"/>
+  <rect x="352" y="488" width="192" height="32" rx="8" fill="#E2E8F0"/>
+  
+  <rect x="352" y="560" width="224" height="32" rx="8" fill="#C7D2FE"/>
+  <rect x="352" y="616" width="160" height="32" rx="8" fill="#DDD6FE"/>
+  
+  <g transform="translate(680, 640)">
+    <circle cx="0" cy="0" r="96" stroke="#6366F1" stroke-width="16" fill="none" stroke-linecap="round" 
+            stroke-dasharray="540 70" transform="rotate(-135)"/>
+    <circle cx="0" cy="0" r="48" fill="#8B5CF6" opacity="0.3"/>
+    <circle cx="0" cy="0" r="24" fill="#A855F7"/>
+  </g>
+  
+  <circle cx="384" cy="336" r="12" fill="#6366F1"/>
+  <circle cx="384" cy="392" r="12" fill="#8B5CF6"/>
+  <circle cx="384" cy="448" r="12" fill="#A855F7"/>
+  <circle cx="384" cy="504" r="12" fill="#C084FC"/>
 </svg>

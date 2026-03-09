@@ -35,7 +35,9 @@ pub fn run() {
             commands::save_to_history,
             commands::delete_history_item,
             commands::toggle_pin_item,
+            commands::toggle_protected,
             commands::copy_to_clipboard,
+            commands::copy_masked_content,
             commands::get_current_clipboard_content,
             commands::copy_image_to_clipboard,
             commands::get_settings,
@@ -49,6 +51,9 @@ pub fn run() {
             commands::update_item_content,
             commands::get_items_by_tag,
             commands::set_autostart,
+            commands::set_global_password,
+            commands::verify_password,
+            commands::has_global_password,
         ])
         .setup(|app| {
             // 启动剪贴板监听

@@ -8,6 +8,7 @@ export interface ClipboardItem {
   content: string;
   preview: string;
   pinned: boolean;
+  protected?: boolean;
   created_at: number;
   updated_at?: number;
   file_path?: string;
@@ -67,6 +68,62 @@ export function useClipboard() {
     }
   }, []);
 
+  // 切换密码保护状态
+  const toggleProtected = useCallback(async (id: string) => {
+    try {
+      await invoke("toggle_protected", { id });
+      setItems(prev =>
+        prev.map(item =>
+          item.id === id ? { ...item, protected: !item.protected } : item
+        )
+      );
+    } catch (error) {
+      console.error("Failed to toggle protected:", error);
+    }
+  }, []);
+
+  // 复制脱敏内容
+  const copyMasked = useCallback(async (content: string) => {
+    try {
+      await invoke("copy_masked_content", { content });
+    } catch (error) {
+      console.error("Failed to copy masked content:", error);
+    }
+  }, []);
+
+  // 验证密码
+  const verifyPassword = useCallback(async (password: string): Promise<boolean> => {
+    try {
+      const result = await invoke<boolean>("verify_password", { password });
+      return result;
+    } catch (error) {
+      console.error("Failed to verify password:", error);
+      return false;
+    }
+  }, []);
+
+  // 检查是否已设置全局密码
+  const hasGlobalPassword = useCallback(async (): Promise<boolean> => {
+    try {
+      const result = await invoke<boolean>("has_global_password");
+      return result;
+    } catch (error) {
+      console.error("Failed to check global password:", error);
+      return false;
+    }
+  }, []);
+
+  // 设置全局密码
+  const setGlobalPassword = useCallback(async (password: string): Promise<boolean> => {
+    try {
+      await invoke("set_global_password", { password });
+      return true;
+    } catch (error) {
+      console.error("Failed to set global password:", error);
+      return false;
+    }
+  }, []);
+
   // 监听剪贴板更新
   useEffect(() => {
     loadItems();
@@ -86,6 +143,11 @@ export function useClipboard() {
     copyToClipboard,
     deleteItem,
     togglePin,
+    toggleProtected,
+    copyMasked,
+    verifyPassword,
+    hasGlobalPassword,
+    setGlobalPassword,
     refresh: loadItems,
   };
 }

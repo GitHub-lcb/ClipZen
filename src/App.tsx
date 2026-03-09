@@ -1,14 +1,72 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2, Info } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2, Info, Lock, Shield } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { useI18n } from "./hooks/useI18n";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { TagManager } from "./components/TagManager";
 import { DataManager } from "./components/DataManager";
 import { ItemDetail } from "./components/ItemDetail";
+import { PasswordDialog } from "./components/PasswordDialog";
+
+const SENSITIVE_PATTERNS = [
+  { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
+  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email", label: "邮箱" },
+  { pattern: /\d{17}[\dXx]/g, type: "idcard", label: "身份证" },
+  { pattern: /\b\d{16,19}\b/g, type: "bankcard", label: "银行卡" },
+];
+
+interface SensitiveMatch {
+  type: string;
+  label: string;
+  original: string;
+  masked: string;
+}
+
+function detectSensitive(content: string): SensitiveMatch[] {
+  const matches: SensitiveMatch[] = [];
+  for (const { pattern, type, label } of SENSITIVE_PATTERNS) {
+    const found = content.match(pattern);
+    if (found) {
+      for (const text of found) {
+        let masked: string;
+        switch (type) {
+          case "phone":
+            masked = text.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
+            break;
+          case "email":
+            const [local, domain] = text.split("@");
+            masked = local.slice(0, 2) + "***@" + domain;
+            break;
+          case "idcard":
+            masked = text.replace(/(\d{4})\d{10}(\d{4})/, "$1**********$2");
+            break;
+          case "bankcard":
+            masked = text.replace(/(\d{4})\d+(\d{4})/, "$1****$2");
+            break;
+          default:
+            masked = "****";
+        }
+        matches.push({ type, label, original: text, masked });
+      }
+    }
+  }
+  return matches;
+}
+
+function getMaskedContent(content: string): string {
+  const matches = detectSensitive(content);
+  return matches.reduce(
+    (text, match) => text.replace(match.original, match.masked),
+    content
+  );
+}
+
+function hasSensitiveInfo(content: string): boolean {
+  return detectSensitive(content).length > 0;
+}
 
 function App() {
-  const { t, locale } = useI18n();
+  const { t, locale, changeLocale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -18,8 +76,34 @@ function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const { items, loading, copyToClipboard, deleteItem, togglePin, refresh } = useClipboard();
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordDialogMode, setPasswordDialogMode] = useState<"set" | "verify">("verify");
+  const [passwordDialogError, setPasswordDialogError] = useState<string | undefined>();
+  const [pendingProtectedItem, setPendingProtectedItem] = useState<ClipboardItem | null>(null);
+  const [unlockedItems, setUnlockedItems] = useState<Set<string>>(new Set());
+  const [enablePasswordProtection, setEnablePasswordProtection] = useState(false);
+  const [enableMaskedCopy, setEnableMaskedCopy] = useState(false);
+  const { items, loading, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    const loadFeatureSettings = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const settings = await invoke<{
+          enable_password_protection: boolean;
+          enable_masked_copy: boolean;
+        }>("get_settings");
+        setEnablePasswordProtection(settings.enable_password_protection);
+        setEnableMaskedCopy(settings.enable_masked_copy);
+      } catch (error) {
+        console.error("Failed to load feature settings:", error);
+      }
+    };
+    loadFeatureSettings();
+  }, []);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -49,6 +133,28 @@ function App() {
   const pinnedItems = filteredItems.filter(item => item.pinned);
   const recentItems = filteredItems.filter(item => !item.pinned);
   const allFilteredItems = [...pinnedItems, ...recentItems];
+
+  const scrollToSelectedItem = useCallback(() => {
+    if (selectedIndex < 0 || selectedIndex >= allFilteredItems.length) return;
+    const item = allFilteredItems[selectedIndex];
+    if (!item) return;
+    const element = itemRefs.current.get(item.id);
+    if (!element || !scrollContainerRef.current) return;
+
+    const container = scrollContainerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+
+    if (elementRect.top < containerRect.top) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (elementRect.bottom > containerRect.bottom) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [selectedIndex, allFilteredItems]);
+
+  useEffect(() => {
+    scrollToSelectedItem();
+  }, [selectedIndex, scrollToSelectedItem]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -128,6 +234,51 @@ function App() {
     }
   };
 
+  const handleProtectedItemClick = (item: ClipboardItem) => {
+    if (unlockedItems.has(item.id)) {
+      handleCopyWithFeedback(item);
+    } else {
+      setPendingProtectedItem(item);
+      setPasswordDialogMode("verify");
+      setPasswordDialogError(undefined);
+      setPasswordDialogOpen(true);
+    }
+  };
+
+  const handlePasswordConfirm = async (password: string) => {
+    const isValid = await verifyPassword(password);
+    if (isValid) {
+      setPasswordDialogOpen(false);
+      if (pendingProtectedItem) {
+        setUnlockedItems(prev => new Set(prev).add(pendingProtectedItem.id));
+        handleCopyWithFeedback(pendingProtectedItem);
+        setPendingProtectedItem(null);
+      }
+    } else {
+      setPasswordDialogError(t('password.incorrect'));
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setPasswordDialogOpen(false);
+    setPendingProtectedItem(null);
+    setPasswordDialogError(undefined);
+  };
+
+  const handleMaskedCopy = async (item: ClipboardItem) => {
+    const maskedContent = getMaskedContent(item.content);
+    await copyToClipboard(maskedContent);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const getDisplayContent = (item: ClipboardItem): string => {
+    if (item.protected && !unlockedItems.has(item.id)) {
+      return "****";
+    }
+    return item.content;
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-white dark:bg-gray-900 gap-3">
@@ -168,9 +319,27 @@ function App() {
         </div>
       </div>
 
-      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} t={t} locale={locale} />
+      <SettingsPanel 
+        isOpen={settingsOpen} 
+        onClose={() => setSettingsOpen(false)} 
+        t={t} 
+        locale={locale} 
+        changeLocale={changeLocale}
+        onFeatureSettingsChange={(passwordProtection, maskedCopy) => {
+          setEnablePasswordProtection(passwordProtection);
+          setEnableMaskedCopy(maskedCopy);
+        }}
+      />
       <DataManager isOpen={dataManagerOpen} onClose={() => setDataManagerOpen(false)} onRefresh={refresh} t={t} />
-      {detailItem && <ItemDetail item={detailItem} onClose={() => setDetailItem(null)} onUpdate={refresh} t={t} />}
+      {detailItem && <ItemDetail item={detailItem} onClose={() => { setDetailItem(null); setUnlockedItems(new Set()); }} onUpdate={refresh} t={t} enablePasswordProtection={enablePasswordProtection} enableMaskedCopy={enableMaskedCopy} />}
+      <PasswordDialog
+        isOpen={passwordDialogOpen}
+        mode={passwordDialogMode}
+        onConfirm={handlePasswordConfirm}
+        onCancel={handlePasswordCancel}
+        error={passwordDialogError}
+        t={t}
+      />
 
       {pinnedItems.length > 0 && (
         <div className="p-3 border-b border-gray-200 dark:border-gray-700">
@@ -179,36 +348,53 @@ function App() {
             <span>{t('pinned.title')}</span>
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {pinnedItems.map((item, idx) => (
-              <div
-                key={item.id}
-                onClick={() => handleCopyWithFeedback(item)}
-                className={`aspect-square rounded cursor-pointer flex items-center justify-center relative group transition-all ${
-                  selectedIndex === idx ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
-                }`}
-              >
-                {copiedId === item.id && (
-                  <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded">
-                    <Check className="w-6 h-6 text-green-500" />
-                  </div>
-                )}
-                {item.item_type === "image" ? (
-                  <img src={item.preview} alt="Image" className="w-full h-full object-cover rounded" />
-                ) : (
-                  <span className="text-xs text-gray-700 dark:text-gray-200 truncate px-2 text-center">{item.preview}</span>
-                )}
-                <button onClick={(e) => { e.stopPropagation(); togglePin(item.id); }} className="absolute top-1 right-1 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Pin className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
+            {pinnedItems.map((item, idx) => {
+              const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
+              return (
+                <div
+                  key={item.id}
+                  ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                  onClick={() => {
+                    if (enablePasswordProtection && item.protected) {
+                      handleProtectedItemClick(item);
+                    } else {
+                      handleCopyWithFeedback(item);
+                    }
+                  }}
+                  className={`aspect-square rounded cursor-pointer flex items-center justify-center relative group transition-all ${
+                    selectedIndex === idx ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30' : 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                  }`}
+                >
+                  {copiedId === item.id && (
+                    <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center rounded">
+                      <Check className="w-6 h-6 text-green-500" />
+                    </div>
+                  )}
+                  {item.item_type === "image" ? (
+                    <img src={item.preview} alt="Image" className="w-full h-full object-cover rounded" />
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      {isProtected && (
+                        <Lock className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                      )}
+                      <span className="text-xs text-gray-700 dark:text-gray-200 truncate px-2 text-center">
+                        {isProtected ? "****" : item.preview}
+                      </span>
+                    </div>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); togglePin(item.id); }} className="absolute top-1 right-1 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Pin className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
       <TagFilter allTags={allTags} selectedTag={selectedTag} onSelectTag={setSelectedTag} t={t} />
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Clipboard className="w-3 h-3" />
@@ -228,11 +414,22 @@ function App() {
               const globalIdx = pinnedItems.length + idx;
               const isSelected = selectedIndex === globalIdx;
               const showDeleteConfirm = deleteConfirmId === item.id;
+              const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
+              const showMaskedCopy = enableMaskedCopy && !isProtected && item.item_type === "text" && hasSensitiveInfo(item.content);
               
               return (
                 <div
                   key={item.id}
-                  onClick={() => item.item_type === "image" ? handleImagePreview(item) : handleCopyWithFeedback(item)}
+                  ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                  onClick={() => {
+                    if (item.item_type === "image") {
+                      handleImagePreview(item);
+                    } else if (enablePasswordProtection && item.protected) {
+                      handleProtectedItemClick(item);
+                    } else {
+                      handleCopyWithFeedback(item);
+                    }
+                  }}
                   className={`p-3 border rounded-lg cursor-pointer transition-all ${
                     isSelected ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md'
                   }`}
@@ -245,7 +442,12 @@ function App() {
                           <span>{t('image.label')}</span>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3">{item.content}</p>
+                        <div className="flex items-start gap-2">
+                          {isProtected && (
+                            <Lock className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                          )}
+                          <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-3">{getDisplayContent(item)}</p>
+                        </div>
                       )}
                       <div className="flex items-center gap-1 mt-2 text-xs text-gray-400">
                         <Clock className="w-3 h-3" />
@@ -261,6 +463,22 @@ function App() {
                           <Check className="w-3 h-3" />
                           {t('actions.copied')}
                         </span>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}
+                        className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 rounded-full transition-colors"
+                        title={t('actions.copy')}
+                      >
+                        <Clipboard className="w-4 h-4" />
+                      </button>
+                      {showMaskedCopy && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleMaskedCopy(item); }} 
+                          className="p-1.5 text-gray-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-500 rounded-full transition-colors" 
+                          title={t('detail.maskedCopy')}
+                        >
+                          <Shield className="w-4 h-4" />
+                        </button>
                       )}
                       <button onClick={(e) => { e.stopPropagation(); setDetailItem(item); }} className="p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-300 rounded-full transition-colors" title={t('detail.title')}>
                         <Info className="w-4 h-4" />

@@ -2,7 +2,7 @@
 
 use crate::clipboard::{ClipboardManager, ClipboardContent};
 use crate::storage::Storage;
-use crate::settings::{SettingsManager, AppSettings};
+use crate::settings::{SettingsManager, AppSettings, hash_password, verify_password_hash};
 use tauri::State;
 use std::sync::{Arc, Mutex};
 use std::fs;
@@ -47,7 +47,19 @@ pub fn toggle_pin_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool 
 }
 
 #[tauri::command]
+pub fn toggle_protected(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+    let storage = storage.lock().unwrap();
+    storage.toggle_protected(&id).is_ok()
+}
+
+#[tauri::command]
 pub fn copy_to_clipboard(content: String, clipboard: State<Arc<Mutex<ClipboardManager>>>) -> bool {
+    let clipboard = clipboard.lock().unwrap();
+    clipboard.set_text(&content).is_ok()
+}
+
+#[tauri::command]
+pub fn copy_masked_content(content: String, clipboard: State<Arc<Mutex<ClipboardManager>>>) -> bool {
     let clipboard = clipboard.lock().unwrap();
     clipboard.set_text(&content).is_ok()
 }
@@ -123,26 +135,32 @@ pub fn save_settings(
 ) -> Result<(), String> {
     let settings = settings.lock().unwrap();
     settings.save(&new_settings)?;
+    drop(settings);
     
-    // 处理开机自启设置
+    if let Err(e) = handle_autostart(&app, new_settings.start_on_boot) {
+        eprintln!("Warning: Failed to set autostart: {}", e);
+    }
+    
+    if new_settings.auto_clear_after_days > 0 {
+        let storage = storage.lock().unwrap();
+        if let Err(e) = storage.auto_cleanup(new_settings.auto_clear_after_days) {
+            eprintln!("Warning: Failed to cleanup: {}", e);
+        }
+    }
+    
+    Ok(())
+}
+
+fn handle_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
     let manager = app.autolaunch();
-    if new_settings.start_on_boot {
+    if enabled {
         manager.enable()
             .map_err(|e| format!("Failed to enable autostart: {}", e))?;
     } else {
         manager.disable()
             .map_err(|e| format!("Failed to disable autostart: {}", e))?;
     }
-    
-    // 处理自动清理
-    if new_settings.auto_clear_after_days > 0 {
-        let storage = storage.lock().unwrap();
-        let deleted = storage.auto_cleanup(new_settings.auto_clear_after_days)
-            .map_err(|e| format!("Failed to cleanup: {}", e))?;
-        println!("Auto-cleanup: deleted {} items", deleted);
-    }
-    
     Ok(())
 }
 
@@ -153,13 +171,14 @@ pub fn export_history(
     storage: State<Arc<Mutex<Storage>>>,
 ) -> Result<usize, String> {
     let storage = storage.lock().unwrap();
-    let items = storage.get_all_items().map_err(|e| e.to_string())?;
+    let items = storage.get_all_items().map_err(|e| format!("Failed to get items: {}", e))?;
     
     let json = serde_json::to_string_pretty(&items)
         .map_err(|e| format!("Failed to serialize: {}", e))?;
     
-    fs::write(&file_path, json)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    let path = PathBuf::from(&file_path);
+    fs::write(&path, json)
+        .map_err(|e| format!("Failed to write file {}: {}", path.display(), e))?;
     
     Ok(items.len())
 }
@@ -330,4 +349,45 @@ pub fn set_autostart(
 #[tauri::command]
 pub fn start_clipboard_monitor() -> String {
     "Monitor started".to_string()
+}
+
+#[tauri::command]
+pub fn set_global_password(
+    password: String,
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> Result<(), String> {
+    let settings_manager = settings.lock().unwrap();
+    let mut app_settings = settings_manager.load();
+    
+    let hashed = hash_password(&password);
+    app_settings.global_password = Some(hashed);
+    
+    settings_manager.save(&app_settings)?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub fn verify_password(
+    password: String,
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> bool {
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    if let Some(stored_hash) = &app_settings.global_password {
+        verify_password_hash(&password, stored_hash)
+    } else {
+        false
+    }
+}
+
+#[tauri::command]
+pub fn has_global_password(
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> bool {
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    app_settings.global_password.is_some()
 }

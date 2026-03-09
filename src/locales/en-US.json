@@ -56,7 +56,12 @@
     "saving": "Saving...",
     "saved": "Settings saved",
     "loadFailed": "Failed to load settings",
-    "saveFailed": "Failed to save settings"
+    "saveFailed": "Failed to save settings",
+    "features": "Features",
+    "enablePasswordProtection": "Enable Password Protection",
+    "enablePasswordProtectionHint": "Enable to protect records with password and hide sensitive content",
+    "enableMaskedCopy": "Enable Masked Copy",
+    "enableMaskedCopyHint": "Enable to copy masked content and protect sensitive information"
   },
   "dataManager": {
     "title": "Data Manager",
@@ -102,6 +107,37 @@
     "saving": "Saving...",
     "sensitiveDetected": "Sensitive data detected",
     "maskSensitive": "Mask",
-    "showOriginal": "Show original"
+    "showOriginal": "Show original",
+    "passwordProtection": "Password Protection",
+    "removeProtection": "Remove Protection",
+    "copyMasked": "Masked Copy",
+    "copyOriginal": "Original Copy",
+    "copyOptions": "Copy Options",
+    "copied": "Copied",
+    "showContent": "Show Content",
+    "hideContent": "Hide Content",
+    "protectedContent": "Protected Content",
+    "maskedCopy": "Masked Copy"
+  },
+  "password": {
+    "title": "Password",
+    "setPassword": "Set Password",
+    "verifyPassword": "Enter Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "passwordPlaceholder": "Enter password",
+    "confirmPlaceholder": "Confirm password",
+    "mismatch": "Passwords do not match",
+    "incorrect": "Incorrect password",
+    "setSuccess": "Password set successfully",
+    "errorEmpty": "Password cannot be empty",
+    "errorMismatch": "Passwords do not match",
+    "errorTooShort": "Password must be at least 4 characters",
+    "errorIncorrect": "Incorrect password",
+    "setTitle": "Set Password",
+    "verifyTitle": "Verify Password",
+    "setHint": "Please set a password to protect sensitive content",
+    "password": "Password",
+    "placeholder": "Enter password"
   }
 }

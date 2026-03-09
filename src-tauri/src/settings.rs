@@ -14,6 +14,9 @@ pub struct AppSettings {
     pub show_in_tray: bool,          // 显示系统托盘
     pub hotkey_show: String,         // 显示/隐藏快捷键
     pub hotkey_copy: String,         // 复制快捷键
+    pub global_password: Option<String>, // 全局密码（哈希存储）
+    pub enable_password_protection: bool, // 密码保护功能开关
+    pub enable_masked_copy: bool,    // 数据脱敏复制功能开关
 }
 
 impl Default for AppSettings {
@@ -27,6 +30,9 @@ impl Default for AppSettings {
             show_in_tray: true,
             hotkey_show: "Shift+Super+V".to_string(),
             hotkey_copy: "Super+C".to_string(),
+            global_password: None,
+            enable_password_protection: false,
+            enable_masked_copy: false,
         }
     }
 }
@@ -40,7 +46,10 @@ impl SettingsManager {
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("clipzen");
-        fs::create_dir_all(&config_dir).ok();
+        
+        if let Err(e) = fs::create_dir_all(&config_dir) {
+            eprintln!("Warning: Failed to create config directory {:?}: {}", config_dir, e);
+        }
         
         let config_path = config_dir.join("settings.json");
         Self { config_path }
@@ -73,4 +82,34 @@ impl Default for SettingsManager {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub fn hash_password(password: &str) -> String {
+    let salt = "clipzen_salt_2024";
+    let mut hash: u64 = 5381;
+    
+    for byte in salt.bytes() {
+        hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
+    }
+    
+    for byte in password.bytes() {
+        hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
+    }
+    
+    let mut result = String::new();
+    let bytes = hash.to_be_bytes();
+    for b in bytes.iter() {
+        result.push_str(&format!("{:02x}", b));
+    }
+    
+    for (i, byte) in password.bytes().enumerate() {
+        result.push_str(&format!("{:02x}", (byte as u64).wrapping_add(hash).wrapping_mul((i + 1) as u64) as u8));
+    }
+    
+    result
+}
+
+pub fn verify_password_hash(password: &str, hash: &str) -> bool {
+    let computed = hash_password(password);
+    computed == hash
 }

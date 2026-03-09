@@ -10,6 +10,8 @@ interface AppSettings {
   show_in_tray: boolean;
   hotkey_show: string;
   hotkey_copy: string;
+  enable_password_protection: boolean;
+  enable_masked_copy: boolean;
 }
 
 interface SettingsPanelProps {
@@ -17,9 +19,11 @@ interface SettingsPanelProps {
   onClose: () => void;
   t: (key: string) => string;
   locale: string;
+  changeLocale: (locale: string) => void;
+  onFeatureSettingsChange?: (enablePasswordProtection: boolean, enableMaskedCopy: boolean) => void;
 }
 
-export function SettingsPanel({ isOpen, onClose, t, locale }: SettingsPanelProps) {
+export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -59,10 +63,13 @@ export function SettingsPanel({ isOpen, onClose, t, locale }: SettingsPanelProps
         root.classList.add(settings.theme);
       }
       
-      // Apply language
-      localStorage.setItem('clipzen-locale', settings.language);
+      // Notify parent of feature settings changes
+      if (onFeatureSettingsChange) {
+        onFeatureSettingsChange(settings.enable_password_protection, settings.enable_masked_copy);
+      }
       
       setMessage({ type: 'success', text: t('settings.saved') });
+      changeLocale(settings.language);
       setTimeout(() => { setMessage(null); onClose(); }, 1500);
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -82,6 +89,8 @@ export function SettingsPanel({ isOpen, onClose, t, locale }: SettingsPanelProps
       show_in_tray: true,
       hotkey_show: "Shift+Super+V",
       hotkey_copy: "Super+C",
+      enable_password_protection: false,
+      enable_masked_copy: false,
     });
     setMessage({ type: 'success', text: 'Reset to defaults' });
   };
@@ -162,6 +171,22 @@ export function SettingsPanel({ isOpen, onClose, t, locale }: SettingsPanelProps
                 <label className="block text-sm text-gray-600 dark:text-gray-300 mb-1">{t('settings.hotkeyCopy')}</label>
                 <input type="text" value={settings.hotkey_copy} onChange={(e) => setSettings({ ...settings, hotkey_copy: e.target.value })} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-mono text-sm" />
               </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-medium text-gray-500 mb-3">{t('settings.features')}</h3>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={settings.enable_password_protection} onChange={(e) => setSettings({ ...settings, enable_password_protection: e.target.checked })} className="w-4 h-4" />
+                <span className="text-sm text-gray-600 dark:text-gray-300">{t('settings.enablePasswordProtection')}</span>
+              </label>
+              <p className="text-xs text-gray-500 ml-6">{t('settings.enablePasswordProtectionHint')}</p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={settings.enable_masked_copy} onChange={(e) => setSettings({ ...settings, enable_masked_copy: e.target.checked })} className="w-4 h-4" />
+                <span className="text-sm text-gray-600 dark:text-gray-300">{t('settings.enableMaskedCopy')}</span>
+              </label>
+              <p className="text-xs text-gray-500 ml-6">{t('settings.enableMaskedCopyHint')}</p>
             </div>
           </section>
 

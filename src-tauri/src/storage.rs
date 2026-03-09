@@ -14,6 +14,7 @@ pub struct ClipboardItem {
     pub content: String,   // 文本内容或图片 base64/文件路径
     pub preview: String,   // 文本预览或图片缩略图 base64
     pub pinned: bool,
+    pub protected: bool,   // 是否受密码保护
     pub created_at: i64,
     pub updated_at: Option<i64>, // 最后更新时间
     pub file_path: Option<String>, // 图片/文件存储路径
@@ -62,6 +63,12 @@ impl Storage {
             [],
         ).ok();
 
+        // 添加 protected 列（如果不存在）
+        conn.execute(
+            "ALTER TABLE clipboard_items ADD COLUMN protected INTEGER NOT NULL DEFAULT 0",
+            [],
+        ).ok();
+
         Ok(Self { conn })
     }
 
@@ -71,13 +78,14 @@ impl Storage {
         let preview = content.chars().take(100).collect();
         
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             [
                 &id,
                 &"text".to_string(),
                 &content.to_string(),
                 &preview,
+                &0.to_string(),
                 &0.to_string(),
                 &Utc::now().timestamp_millis().to_string(),
                 &"".to_string(),
@@ -116,13 +124,14 @@ impl Storage {
         let id = Uuid::new_v4().to_string();
         
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             [
                 &id,
                 &"image".to_string(),
                 &base64_encode(image_data),
                 preview_base64,
+                &0.to_string(),
                 &0.to_string(),
                 &Utc::now().timestamp_millis().to_string(),
                 &file_path.to_string(),
@@ -137,14 +146,15 @@ impl Storage {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
         let updated_at = item.updated_at.map(|t| t.to_string()).unwrap_or_default();
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             [
                 &item.id,
                 &item.item_type,
                 &item.content,
                 &item.preview,
                 &(if item.pinned { 1 } else { 0 }).to_string(),
+                &(if item.protected { 1 } else { 0 }).to_string(),
                 &item.created_at.to_string(),
                 &item.file_path.clone().unwrap_or_default(),
                 &tags_json,
@@ -156,15 +166,15 @@ impl Storage {
 
     pub fn get_all_items(&self) -> Result<Vec<ClipboardItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, item_type, content, preview, pinned, created_at, file_path, tags, updated_at 
+            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at 
              FROM clipboard_items 
              ORDER BY created_at DESC"
         )?;
 
         let items = stmt.query_map([], |row| {
-            let tags_str: String = row.get(7)?;
+            let tags_str: String = row.get(8)?;
             let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-            let updated_at: Option<i64> = row.get(8).ok();
+            let updated_at: Option<i64> = row.get(9).ok();
             
             Ok(ClipboardItem {
                 id: row.get(0)?,
@@ -172,8 +182,9 @@ impl Storage {
                 content: row.get(2)?,
                 preview: row.get(3)?,
                 pinned: row.get::<_, i32>(4)? == 1,
-                created_at: row.get(5)?,
-                file_path: row.get(6)?,
+                protected: row.get::<_, i32>(5)? == 1,
+                created_at: row.get(6)?,
+                file_path: row.get(7)?,
                 updated_at,
                 tags,
             })
@@ -202,6 +213,14 @@ impl Storage {
         Ok(())
     }
 
+    pub fn toggle_protected(&self, id: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE clipboard_items SET protected = NOT protected WHERE id = ?1",
+            [id],
+        )?;
+        Ok(())
+    }
+
     /// 检查内容是否已存在
     pub fn content_exists(&self, content: &str) -> Result<bool> {
         let mut stmt = self.conn.prepare(
@@ -215,14 +234,15 @@ impl Storage {
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             [
                 &item.id,
                 &item.item_type,
                 &item.content,
                 &item.preview,
                 &(if item.pinned { 1 } else { 0 }).to_string(),
+                &(if item.protected { 1 } else { 0 }).to_string(),
                 &item.created_at.to_string(),
                 &item.file_path.clone().unwrap_or_default(),
                 &tags_json,

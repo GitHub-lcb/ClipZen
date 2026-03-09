@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { X, Edit2, Eye, EyeOff, Tag, Check, RotateCcw } from "lucide-react";
+import { X, Edit2, Eye, EyeOff, Tag, Check, RotateCcw, Lock, Unlock, Copy } from "lucide-react";
 import { TagManager } from "./TagManager";
+import { PasswordDialog } from "./PasswordDialog";
 
 interface ItemDetailProps {
   item: {
@@ -9,6 +10,7 @@ interface ItemDetailProps {
     content: string;
     preview: string;
     pinned: boolean;
+    protected?: boolean;
     created_at: number;
     tags?: string[];
     file_path?: string;
@@ -16,6 +18,8 @@ interface ItemDetailProps {
   onClose: () => void;
   onUpdate: () => void;
   t: (key: string) => string;
+  enablePasswordProtection?: boolean;
+  enableMaskedCopy?: boolean;
 }
 
 // 敏感信息检测正则
@@ -66,21 +70,39 @@ function detectSensitive(content: string): SensitiveMatch[] {
   return matches;
 }
 
-export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
+export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtection = false, enableMaskedCopy = false }: ItemDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
   const [isMasked, setIsMasked] = useState(false);
   const [sensitiveMatches, setSensitiveMatches] = useState<SensitiveMatch[]>([]);
   const [saving, setSaving] = useState(false);
   const [tags, setTags] = useState<string[]>(item.tags || []);
+  const [isProtected, setIsProtected] = useState(item.protected || false);
+  const [showProtectedContent, setShowProtectedContent] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordDialogMode, setPasswordDialogMode] = useState<"set" | "verify">("set");
+  const [passwordDialogError, setPasswordDialogError] = useState("");
+  const [pendingAction, setPendingAction] = useState<"toggle" | "show" | null>(null);
+  const [hasGlobalPwd, setHasGlobalPwd] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
-    // 检测敏感信息
     if (item.item_type === "text") {
       const matches = detectSensitive(item.content);
       setSensitiveMatches(matches);
     }
-  }, [item.content, item.item_type]);
+    setIsProtected(item.protected || false);
+    setShowProtectedContent(false);
+  }, [item.content, item.item_type, item.protected]);
+
+  useEffect(() => {
+    const checkGlobalPassword = async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const result = await invoke<boolean>("has_global_password");
+      setHasGlobalPwd(result);
+    };
+    checkGlobalPassword();
+  }, []);
 
   const displayContent = isMasked
     ? sensitiveMatches.reduce(
@@ -88,6 +110,90 @@ export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
         item.content
       )
     : item.content;
+
+  const getMaskedContentForCopy = () => {
+    return sensitiveMatches.reduce(
+      (text, match) => text.replace(match.original, match.masked),
+      item.content
+    );
+  };
+
+  const handleCopyMasked = async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const maskedContent = getMaskedContentForCopy();
+    await invoke("copy_masked_content", { content: maskedContent });
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
+  const handleToggleProtected = async () => {
+    if (!hasGlobalPwd) {
+      setPasswordDialogMode("set");
+      setPasswordDialogOpen(true);
+      setPendingAction("toggle");
+      return;
+    }
+    if (isProtected) {
+      setPasswordDialogMode("verify");
+      setPasswordDialogOpen(true);
+      setPendingAction("toggle");
+    } else {
+      await executeToggleProtected();
+    }
+  };
+
+  const executeToggleProtected = async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("toggle_protected", { id: item.id });
+    setIsProtected(!isProtected);
+    setShowProtectedContent(false);
+    onUpdate();
+  };
+
+  const handleShowProtectedContent = () => {
+    if (!showProtectedContent) {
+      setPasswordDialogMode("verify");
+      setPasswordDialogOpen(true);
+      setPendingAction("show");
+    } else {
+      setShowProtectedContent(false);
+    }
+  };
+
+  const handlePasswordConfirm = async (password: string) => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    
+    if (passwordDialogMode === "set") {
+      await invoke("set_global_password", { password });
+      setHasGlobalPwd(true);
+      setPasswordDialogOpen(false);
+      setPasswordDialogError("");
+      if (pendingAction === "toggle") {
+        await executeToggleProtected();
+      }
+      setPendingAction(null);
+    } else {
+      const isValid = await invoke<boolean>("verify_password", { password });
+      if (isValid) {
+        setPasswordDialogOpen(false);
+        setPasswordDialogError("");
+        if (pendingAction === "toggle") {
+          await executeToggleProtected();
+        } else if (pendingAction === "show") {
+          setShowProtectedContent(true);
+        }
+        setPendingAction(null);
+      } else {
+        setPasswordDialogError(t("password.errorIncorrect"));
+      }
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    setPasswordDialogOpen(false);
+    setPasswordDialogError("");
+    setPendingAction(null);
+  };
 
   const handleSave = async () => {
     if (editContent === item.content) {
@@ -139,22 +245,72 @@ export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* 敏感信息提示 */}
-          {sensitiveMatches.length > 0 && !isEditing && (
-            <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+          {/* 密码保护开关 */}
+          {enablePasswordProtection && (
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
               <div className="flex items-center gap-2">
+                {isProtected ? (
+                  <Lock className="w-4 h-4 text-red-500" />
+                ) : (
+                  <Unlock className="w-4 h-4 text-gray-400" />
+                )}
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('detail.passwordProtection')}
+                </span>
+              </div>
+              <button
+                onClick={handleToggleProtected}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  isProtected ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    isProtected ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
+
+          {/* 敏感信息提示 */}
+          {enableMaskedCopy && sensitiveMatches.length > 0 && !isEditing && (
+            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
                 <EyeOff className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
                 <span className="text-sm text-yellow-700 dark:text-yellow-300">
                   {t('detail.sensitiveDetected')}: {sensitiveMatches.map(m => m.label).join("、")}
                 </span>
               </div>
-              <button
-                onClick={() => setIsMasked(!isMasked)}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition-colors"
-              >
-                {isMasked ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                {isMasked ? t('detail.showOriginal') : t('detail.maskSensitive')}
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-yellow-600 dark:text-yellow-400">{t('detail.copyOptions')}:</span>
+                <button
+                  onClick={async () => {
+                    const { invoke } = await import("@tauri-apps/api/core");
+                    await invoke("copy_to_clipboard", { content: item.content });
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  {t('detail.copyOriginal')}
+                </button>
+                <button
+                  onClick={handleCopyMasked}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copySuccess ? t('detail.copied') : t('detail.copyMasked')}
+                </button>
+                <button
+                  onClick={() => setIsMasked(!isMasked)}
+                  className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  {isMasked ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  {isMasked ? t('detail.showOriginal') : t('detail.maskSensitive')}
+                </button>
+              </div>
             </div>
           )}
 
@@ -164,15 +320,26 @@ export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {t('detail.content')}
               </label>
-              {!isEditing && item.item_type === "text" && (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  {t('detail.edit')}
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {enablePasswordProtection && isProtected && !isEditing && (
+                  <button
+                    onClick={handleShowProtectedContent}
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    {showProtectedContent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showProtectedContent ? t('detail.hideContent') : t('detail.showContent')}
+                  </button>
+                )}
+                {!isEditing && item.item_type === "text" && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    {t('detail.edit')}
+                  </button>
+                )}
+              </div>
             </div>
             
             {isEditing ? (
@@ -216,7 +383,7 @@ export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
             ) : (
               <div className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
                 <pre className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap break-all font-mono">
-                  {displayContent}
+                  {enablePasswordProtection && isProtected && !showProtectedContent ? "****" : displayContent}
                 </pre>
               </div>
             )}
@@ -246,6 +413,16 @@ export function ItemDetail({ item, onClose, onUpdate, t }: ItemDetailProps) {
           </div>
         </div>
       </div>
+
+      {/* 密码对话框 */}
+      <PasswordDialog
+        isOpen={passwordDialogOpen}
+        mode={passwordDialogMode}
+        onConfirm={handlePasswordConfirm}
+        onCancel={handlePasswordCancel}
+        error={passwordDialogError}
+        t={t}
+      />
     </div>
   );
 }
