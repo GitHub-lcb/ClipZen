@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Lock, Eye, EyeOff } from "lucide-react";
+import { Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 interface PasswordDialogProps {
   isOpen: boolean;
@@ -33,6 +33,15 @@ export function PasswordDialog({
       setLocalError("");
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onCancel]);
 
   if (!isOpen) return null;
 
@@ -70,31 +79,48 @@ export function PasswordDialog({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 flex items-center justify-center z-50 p-4 animate-fade-in"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
       onClick={handleCancel}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full overflow-hidden"
+        className="rounded-2xl shadow-xl max-w-md w-full overflow-hidden animate-scale-in"
+        style={{ 
+          backgroundColor: 'var(--color-bg-card)',
+          boxShadow: 'var(--shadow-lg)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-            <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        <div 
+          className="flex items-center gap-3 px-6 py-4 border-b transition-colors duration-200"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <div 
+            className="p-2 rounded-lg"
+            style={{ backgroundColor: 'var(--color-primary-light)' }}
+          >
+            <Lock className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+          <h3 
+            className="text-lg font-semibold"
+            style={{ color: 'var(--color-text)' }}
+          >
             {mode === "set" ? t("password.setTitle") : t("password.verifyTitle")}
           </h3>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {mode === "set" && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               {t("password.setHint")}
             </p>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+            <label 
+              className="block text-sm font-medium mb-2"
+              style={{ color: 'var(--color-text)' }}
+            >
               {mode === "set" ? t("password.newPassword") : t("password.password")}
             </label>
             <div className="relative">
@@ -102,14 +128,15 @@ export function PasswordDialog({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="input-field pr-10"
                 placeholder={t("password.placeholder")}
                 autoFocus
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 transition-colors duration-200"
+                style={{ color: 'var(--color-text-muted)' }}
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -122,7 +149,10 @@ export function PasswordDialog({
 
           {mode === "set" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              <label 
+                className="block text-sm font-medium mb-2"
+                style={{ color: 'var(--color-text)' }}
+              >
                 {t("password.confirmPassword")}
               </label>
               <div className="relative">
@@ -130,13 +160,14 @@ export function PasswordDialog({
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input-field pr-10"
                   placeholder={t("password.confirmPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 transition-colors duration-200"
+                  style={{ color: 'var(--color-text-muted)' }}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -149,8 +180,14 @@ export function PasswordDialog({
           )}
 
           {displayError && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">
+            <div 
+              className="p-4 rounded-xl flex items-start gap-3 animate-slide-up"
+              style={{ 
+                backgroundColor: 'var(--color-error-light)',
+              }}
+            >
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-error)' }} />
+              <p className="text-sm" style={{ color: 'var(--color-error)' }}>
                 {displayError}
               </p>
             </div>
@@ -160,13 +197,13 @@ export function PasswordDialog({
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="btn-secondary"
             >
               {t("actions.cancel")}
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="btn-primary"
             >
               {t("actions.confirm")}
             </button>

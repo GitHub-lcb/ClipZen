@@ -54,6 +54,7 @@ pub fn run() {
             commands::set_global_password,
             commands::verify_password,
             commands::has_global_password,
+            commands::get_image_data,
         ])
         .setup(|app| {
             // 启动剪贴板监听
@@ -171,7 +172,7 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
                     
                     if fs::write(&file_path, &image_data).is_ok() {
                         // 生成预览（缩略图 base64）
-                        let preview = format!("data:image/png;base64,{}", base64_encode(&image_data[..image_data.len().min(50000)]));
+                        let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(50000)]));
                         
                         let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap());
                         let max_items = settings.load().max_history_items;

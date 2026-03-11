@@ -23,6 +23,7 @@ impl ClipboardManager {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_text(&self) -> Option<String> {
         let mut clip = self.clipboard.lock().unwrap();
         if let Some(ref mut c) = *clip {

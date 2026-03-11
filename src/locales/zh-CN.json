@@ -74,8 +74,8 @@
     "importing": "导入中...",
     "importSuccess": "已导入 {n} 条记录",
     "clear": "清空数据",
-    "clearHint": "删除所有剪贴板历史记录",
-    "keepPinned": "保留置顶记录",
+    "clearHint": "删除所有剪贴板历史记录（置顶和带标签的记录将保留）",
+    "keepPinned": "保留置顶和带标签的记录",
     "clearing": "清空中...",
     "clearSuccess": "已删除 {n} 条记录",
     "clearFailed": "清空失败"
@@ -96,7 +96,9 @@
     "delete": "Del删除"
   },
   "image": {
-    "label": "图片"
+    "label": "图片",
+    "clickToCopy": "点击复制到剪贴板",
+    "preview": "查看大图"
   },
   "detail": {
     "title": "详情",

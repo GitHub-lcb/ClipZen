@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Database, Download, Upload, Trash2, X, AlertTriangle } from "lucide-react";
+import { Database, Download, Upload, Trash2, X, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 interface DataManagerProps {
   isOpen: boolean;
@@ -86,59 +86,162 @@ export function DataManager({ isOpen, onClose, onRefresh, t }: DataManagerProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-900 rounded-lg w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-gray-500" />
-            <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200">{t('dataManager.title')}</h2>
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50 animate-fade-in"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+    >
+      <div 
+        className="rounded-2xl w-full max-w-md overflow-hidden animate-scale-in"
+        style={{ 
+          backgroundColor: 'var(--color-bg-card)',
+          boxShadow: 'var(--shadow-lg)'
+        }}
+      >
+        <div 
+          className="flex items-center justify-between px-6 py-4 border-b transition-colors duration-200"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div 
+              className="p-2 rounded-lg"
+              style={{ backgroundColor: 'var(--color-primary-light)' }}
+            >
+              <Database className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+            </div>
+            <h2 
+              className="text-lg font-semibold"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {t('dataManager.title')}
+            </h2>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
-            <X className="w-5 h-5 text-gray-500" />
+          <button 
+            onClick={onClose} 
+            className="btn-icon"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 space-y-4">
-          <button onClick={exportData} disabled={exporting} className="w-full flex items-center justify-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
-            <Download className="w-5 h-5 text-blue-500" />
-            <div className="text-left">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('dataManager.export')}</p>
-              <p className="text-xs text-gray-500">{t('dataManager.exportHint')}</p>
+          <button 
+            onClick={exportData} 
+            disabled={exporting} 
+            className="w-full flex items-center justify-center gap-4 p-4 rounded-xl border transition-all duration-200 hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100"
+            style={{ 
+              backgroundColor: 'var(--color-bg)',
+              borderColor: 'var(--color-border)'
+            }}
+          >
+            <div 
+              className="p-2 rounded-lg"
+              style={{ backgroundColor: 'var(--color-info-light)' }}
+            >
+              <Download className="w-5 h-5" style={{ color: 'var(--color-info)' }} />
             </div>
-            {exporting && <span className="text-xs text-gray-400">{t('dataManager.exporting')}</span>}
+            <div className="text-left flex-1">
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                {t('dataManager.export')}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {t('dataManager.exportHint')}
+              </p>
+            </div>
+            {exporting && <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-primary)' }} />}
           </button>
 
-          <button onClick={importData} disabled={importing} className="w-full flex items-center justify-center gap-3 p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
-            <Upload className="w-5 h-5 text-green-500" />
-            <div className="text-left">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('dataManager.import')}</p>
-              <p className="text-xs text-gray-500">{t('dataManager.importHint')}</p>
+          <button 
+            onClick={importData} 
+            disabled={importing} 
+            className="w-full flex items-center justify-center gap-4 p-4 rounded-xl border transition-all duration-200 hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100"
+            style={{ 
+              backgroundColor: 'var(--color-bg)',
+              borderColor: 'var(--color-border)'
+            }}
+          >
+            <div 
+              className="p-2 rounded-lg"
+              style={{ backgroundColor: 'var(--color-success-light)' }}
+            >
+              <Upload className="w-5 h-5" style={{ color: 'var(--color-success)' }} />
             </div>
-            {importing && <span className="text-xs text-gray-400">{t('dataManager.importing')}</span>}
+            <div className="text-left flex-1">
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                {t('dataManager.import')}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                {t('dataManager.importHint')}
+              </p>
+            </div>
+            {importing && <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-primary)' }} />}
           </button>
 
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <div 
+            className="rounded-xl p-4 border"
+            style={{ 
+              backgroundColor: 'var(--color-error-light)',
+              borderColor: 'transparent'
+            }}
+          >
             <div className="flex items-center gap-3 mb-3">
-              <Trash2 className="w-5 h-5 text-red-500" />
+              <div 
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: 'var(--color-bg-card)' }}
+              >
+                <Trash2 className="w-5 h-5" style={{ color: 'var(--color-error)' }} />
+              </div>
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('dataManager.clear')}</p>
-                <p className="text-xs text-gray-500">{t('dataManager.clearHint')}</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-error)' }}>
+                  {t('dataManager.clear')}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  {t('dataManager.clearHint')}
+                </p>
               </div>
             </div>
             
-            <label className="flex items-center gap-2 mb-3 cursor-pointer">
-              <input type="checkbox" checked={keepPinned} onChange={(e) => setKeepPinned(e.target.checked)} className="w-4 h-4" />
-              <span className="text-sm text-gray-600 dark:text-gray-300">{t('dataManager.keepPinned')}</span>
+            <label className="flex items-center gap-3 mb-4 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={keepPinned} 
+                onChange={(e) => setKeepPinned(e.target.checked)} 
+                className="w-5 h-5 rounded"
+                style={{ accentColor: 'var(--color-primary)' }}
+              />
+              <span className="text-sm" style={{ color: 'var(--color-text)' }}>
+                {t('dataManager.keepPinned')}
+              </span>
             </label>
 
-            <button onClick={clearData} disabled={clearing} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50">
-              <AlertTriangle className="w-4 h-4" />
+            <button 
+              onClick={clearData} 
+              disabled={clearing} 
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              style={{ 
+                backgroundColor: 'var(--color-error)',
+                color: 'white'
+              }}
+            >
+              {clearing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <AlertTriangle className="w-4 h-4" />
+              )}
               {clearing ? t('dataManager.clearing') : t('actions.confirm')}
             </button>
           </div>
 
           {message && (
-            <div className={`p-3 rounded text-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}>
+            <div 
+              className={`p-4 rounded-lg text-sm flex items-center gap-2 animate-slide-up ${
+                message.type === 'success' ? 'badge-success' : 'badge-error'
+              }`}
+            >
+              {message.type === 'success' ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <AlertTriangle className="w-4 h-4" />
+              )}
               {message.text}
             </div>
           )}

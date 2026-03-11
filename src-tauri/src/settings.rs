@@ -73,6 +73,7 @@ impl SettingsManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_config_path(&self) -> String {
         self.config_path.to_str().unwrap_or("").to_string()
     }

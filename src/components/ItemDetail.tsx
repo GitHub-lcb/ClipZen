@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Edit2, Eye, EyeOff, Tag, Check, RotateCcw, Lock, Unlock, Copy } from "lucide-react";
+import { X, Edit2, Eye, EyeOff, Tag, Check, RotateCcw, Lock, Unlock, Copy, Shield, Info, Calendar } from "lucide-react";
 import { TagManager } from "./TagManager";
 import { PasswordDialog } from "./PasswordDialog";
 
@@ -22,7 +22,6 @@ interface ItemDetailProps {
   enableMaskedCopy?: boolean;
 }
 
-// 敏感信息检测正则
 const SENSITIVE_PATTERNS = [
   { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
   { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email", label: "邮箱" },
@@ -85,6 +84,23 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
   const [pendingAction, setPendingAction] = useState<"toggle" | "show" | null>(null);
   const [hasGlobalPwd, setHasGlobalPwd] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [imageData, setImageData] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (item.item_type === "image" && item.file_path) {
+      const loadImage = async () => {
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          const data = await invoke<string>("get_image_data", { filePath: item.file_path });
+          setImageData(data);
+        } catch (error) {
+          console.error("Failed to load image:", error);
+          setImageData(item.content);
+        }
+      };
+      loadImage();
+    }
+  }, [item.id, item.file_path, item.item_type]);
 
   useEffect(() => {
     if (item.item_type === "text") {
@@ -103,6 +119,15 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
     };
     checkGlobalPassword();
   }, []);
+
+  useEffect(() => {
+    if (!item) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [item, onClose]);
 
   const displayContent = isMasked
     ? sensitiveMatches.reduce(
@@ -225,65 +250,110 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50 p-4 animate-fade-in"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      onClick={onClose}
+    >
       <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        className="rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-scale-in"
+        style={{ 
+          backgroundColor: 'var(--color-bg-card)',
+          boxShadow: 'var(--shadow-lg)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {t('detail.title')}
-          </h3>
+        <div 
+          className="flex items-center justify-between px-6 py-4 border-b transition-colors duration-200"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <div className="flex items-center gap-3">
+            <div 
+              className="p-2 rounded-lg"
+              style={{ backgroundColor: 'var(--color-primary-light)' }}
+            >
+              <Info className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
+            </div>
+            <h3 
+              className="text-lg font-semibold"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {t('detail.title')}
+            </h3>
+          </div>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="btn-icon"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* 密码保护开关 */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {enablePasswordProtection && (
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
-              <div className="flex items-center gap-2">
+            <div 
+              className="flex items-center justify-between p-4 rounded-xl border transition-colors duration-200"
+              style={{ 
+                backgroundColor: 'var(--color-bg)',
+                borderColor: 'var(--color-border)'
+              }}
+            >
+              <div className="flex items-center gap-3">
                 {isProtected ? (
-                  <Lock className="w-4 h-4 text-red-500" />
+                  <Lock className="w-5 h-5" style={{ color: 'var(--color-error)' }} />
                 ) : (
-                  <Unlock className="w-4 h-4 text-gray-400" />
+                  <Unlock className="w-5 h-5" style={{ color: 'var(--color-text-muted)' }} />
                 )}
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {t('detail.passwordProtection')}
-                </span>
+                <div>
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {t('detail.passwordProtection')}
+                  </span>
+                  {isProtected && (
+                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      内容已加密保护
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={handleToggleProtected}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  isProtected ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'
-                }`}
+                className={`
+                  relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200
+                  ${isProtected 
+                    ? 'bg-red-500' 
+                    : 'bg-gray-200 dark:bg-gray-600'
+                  }
+                `}
+                style={!isProtected ? { backgroundColor: 'var(--color-border)' } : undefined}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    isProtected ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`
+                    inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200
+                    ${isProtected ? 'translate-x-6' : 'translate-x-1'}
+                  `}
                 />
               </button>
             </div>
           )}
 
-          {/* 敏感信息提示 */}
           {enableMaskedCopy && sensitiveMatches.length > 0 && !isEditing && (
-            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <EyeOff className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                <span className="text-sm text-yellow-700 dark:text-yellow-300">
+            <div 
+              className="p-4 rounded-xl border animate-slide-up"
+              style={{ 
+                backgroundColor: 'var(--color-warning-light)',
+                borderColor: 'transparent'
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="w-4 h-4" style={{ color: 'var(--color-warning)' }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--color-warning)' }}>
                   {t('detail.sensitiveDetected')}: {sensitiveMatches.map(m => m.label).join("、")}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-yellow-600 dark:text-yellow-400">{t('detail.copyOptions')}:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs" style={{ color: 'var(--color-warning)' }}>
+                  {t('detail.copyOptions')}:
+                </span>
                 <button
                   onClick={async () => {
                     const { invoke } = await import("@tauri-apps/api/core");
@@ -291,21 +361,34 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
                     setCopySuccess(true);
                     setTimeout(() => setCopySuccess(false), 2000);
                   }}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 hover:opacity-90"
+                  style={{ 
+                    backgroundColor: 'var(--color-bg-card)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-border)'
+                  }}
                 >
                   <Copy className="w-4 h-4" />
                   {t('detail.copyOriginal')}
                 </button>
                 <button
                   onClick={handleCopyMasked}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 hover:opacity-90"
+                  style={{ 
+                    backgroundColor: 'var(--color-warning)',
+                    color: 'white'
+                  }}
                 >
                   <Copy className="w-4 h-4" />
                   {copySuccess ? t('detail.copied') : t('detail.copyMasked')}
                 </button>
                 <button
                   onClick={() => setIsMasked(!isMasked)}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200"
+                  style={{ 
+                    backgroundColor: 'var(--color-border)',
+                    color: 'var(--color-text-secondary)'
+                  }}
                 >
                   {isMasked ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   {isMasked ? t('detail.showOriginal') : t('detail.maskSensitive')}
@@ -314,17 +397,16 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
             </div>
           )}
 
-          {/* 内容区域 */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                 {t('detail.content')}
               </label>
               <div className="flex items-center gap-2">
                 {enablePasswordProtection && isProtected && !isEditing && (
                   <button
                     onClick={handleShowProtectedContent}
-                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 btn-secondary"
                   >
                     {showProtectedContent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     {showProtectedContent ? t('detail.hideContent') : t('detail.showContent')}
@@ -333,7 +415,7 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
                 {!isEditing && item.item_type === "text" && (
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 btn-secondary"
                   >
                     <Edit2 className="w-4 h-4" />
                     {t('detail.edit')}
@@ -343,17 +425,17 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
             </div>
             
             {isEditing ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full h-48 p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input-field h-48 resize-none font-mono text-sm"
                   autoFocus
                 />
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={handleCancel}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    className="btn-secondary flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-4 h-4" />
                     {t('actions.cancel')}
@@ -361,7 +443,7 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                    className="btn-primary flex items-center gap-1.5"
                   >
                     {saving ? (
                       <span className="animate-spin">⏳</span>
@@ -373,27 +455,41 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
                 </div>
               </div>
             ) : item.item_type === "image" ? (
-              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <div 
+                className="rounded-xl overflow-hidden border"
+                style={{ 
+                  borderColor: 'var(--color-border)',
+                  backgroundColor: 'var(--color-bg)'
+                }}
+              >
                 <img 
-                  src={item.content} 
+                  src={imageData || item.content} 
                   alt="Clipboard image" 
                   className="max-w-full max-h-64 mx-auto"
                 />
               </div>
             ) : (
-              <div className="p-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <pre className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap break-all font-mono">
+              <div 
+                className="p-4 rounded-xl border"
+                style={{ 
+                  backgroundColor: 'var(--color-bg)',
+                  borderColor: 'var(--color-border)'
+                }}
+              >
+                <pre 
+                  className="text-sm whitespace-pre-wrap break-all font-mono"
+                  style={{ color: 'var(--color-text)' }}
+                >
                   {enablePasswordProtection && isProtected && !showProtectedContent ? "****" : displayContent}
                 </pre>
               </div>
             )}
           </div>
 
-          {/* 标签区域 */}
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Tag className="w-4 h-4 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
+              <label className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
                 {t('detail.tags')}
               </label>
             </div>
@@ -405,16 +501,18 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
             />
           </div>
 
-          {/* 元信息 */}
-          <div className="text-xs text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <div>ID: {item.id}</div>
-            <div>创建时间: {new Date(item.created_at).toLocaleString()}</div>
-            {item.file_path && <div>文件路径: {item.file_path}</div>}
+          <div 
+            className="pt-4 border-t"
+            style={{ borderColor: 'var(--color-border)' }}
+          >
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              <Calendar className="w-3.5 h-3.5" />
+              <span>创建于 {new Date(item.created_at).toLocaleString()}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 密码对话框 */}
       <PasswordDialog
         isOpen={passwordDialogOpen}
         mode={passwordDialogMode}

@@ -96,7 +96,9 @@
     "delete": "Del Delete"
   },
   "image": {
-    "label": "Image"
+    "label": "Image",
+    "clickToCopy": "Click to copy to clipboard",
+    "preview": "Preview"
   },
   "detail": {
     "title": "Details",

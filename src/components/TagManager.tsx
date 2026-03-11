@@ -61,28 +61,61 @@ export function TagManager({ itemId, currentTags, onTagsChange, t }: TagManagerP
   const availableTags = allTags.filter(t => !currentTags.includes(t));
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-2">
       {currentTags.map(tag => (
-        <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs rounded">
+        <span 
+          key={tag} 
+          className="tag flex items-center gap-1.5"
+        >
           <Tag className="w-3 h-3" />
           {tag}
-          <button onClick={() => removeTag(tag)} className="hover:text-blue-800 dark:hover:text-blue-200">
+          <button 
+            onClick={() => removeTag(tag)} 
+            className="ml-0.5 hover:opacity-70 transition-opacity"
+          >
             <X className="w-3 h-3" />
           </button>
         </span>
       ))}
       {showInput ? (
-        <input type="text" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={handleKeyDown} onBlur={() => { if (!newTag.trim()) setShowInput(false); }} placeholder={t('tags.addTag')} className="px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 outline-none" autoFocus />
+        <div className="relative">
+          <input
+            type="text"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => { if (!newTag.trim()) setShowInput(false); }}
+            placeholder={t('tags.addTag')}
+            className="input-field text-xs w-24 py-1"
+            autoFocus
+          />
+        </div>
       ) : (
-        <button onClick={() => setShowInput(true)} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+        <button 
+          onClick={() => setShowInput(true)} 
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full transition-all duration-200 hover:opacity-80"
+          style={{ 
+            backgroundColor: 'var(--color-border)',
+            color: 'var(--color-text-secondary)'
+          }}
+        >
           <Plus className="w-3 h-3" />
           {t('tags.addTag')}
         </button>
       )}
       {availableTags.length > 0 && (
-        <div className="w-full mt-1 flex flex-wrap gap-1">
+        <div className="w-full mt-2 flex flex-wrap gap-1.5">
           {availableTags.slice(0, 5).map(tag => (
-            <button key={tag} onClick={() => addTag(tag)} className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs rounded hover:bg-gray-200 dark:hover:bg-gray-700">
+            <button 
+              key={tag} 
+              onClick={() => addTag(tag)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-all duration-200 hover:scale-105"
+              style={{ 
+                backgroundColor: 'var(--color-border)',
+                color: 'var(--color-text-secondary)'
+              }}
+            >
+              <Plus className="w-3 h-3" />
               <Tag className="w-3 h-3" />
               {tag}
             </button>

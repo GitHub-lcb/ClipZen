@@ -20,5 +20,6 @@ export default defineConfig(async () => ({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
+    maxHeaderSize: 1024 * 1024, // 增加请求头限制到 1MB
   },
 }));

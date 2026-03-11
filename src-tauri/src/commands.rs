@@ -101,6 +101,7 @@ pub fn get_current_clipboard_content(
             "image".to_string()
         }
         ClipboardContent::Empty => "empty".to_string(),
+        ClipboardContent::Files(_) => "files".to_string(),
     }
 }
 
@@ -394,4 +395,11 @@ pub fn has_global_password(
     let app_settings = settings_manager.load();
     
     app_settings.global_password.is_some()
+}
+
+/// 按需加载图片数据（用于大图预览，避免一次性传输过大数据）
+#[tauri::command]
+pub fn get_image_data(file_path: String) -> Result<String, String> {
+    let data = fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
+    Ok(format!("data:image/png;base64,{}", crate::storage::base64_encode(&data)))
 }
