@@ -2,10 +2,13 @@
 
 use arboard::Clipboard;
 use std::sync::Mutex;
+use std::path::Path;
 
+#[derive(Debug, Clone)]
 pub enum ClipboardContent {
     Text(String),
     Image(Vec<u8>), // PNG 格式字节
+    Files(Vec<String>), // 文件路径列表
     Empty,
 }
 
@@ -38,6 +41,31 @@ impl ClipboardManager {
         }
     }
 
+    /// 检测文本是否是文件路径（可能是多个路径，每行一个）
+    fn detect_file_paths(text: &str) -> Option<Vec<String>> {
+        let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+        if lines.is_empty() {
+            return None;
+        }
+        
+        let mut paths: Vec<String> = Vec::new();
+        for line in lines {
+            let trimmed = line.trim();
+            // 检测是否是文件路径
+            let path = Path::new(trimmed);
+            if path.exists() && (trimmed.starts_with('/') || trimmed.starts_with('~') || 
+                (trimmed.len() > 2 && trimmed.chars().nth(1) == Some(':'))) { // Unix 或 Windows 路径
+                paths.push(trimmed.to_string());
+            }
+        }
+        
+        if !paths.is_empty() {
+            Some(paths)
+        } else {
+            None
+        }
+    }
+
     /// 获取剪贴板内容（自动检测类型）
     pub fn get_content(&self) -> ClipboardContent {
         let mut clip = self.clipboard.lock().unwrap();
@@ -59,6 +87,10 @@ impl ClipboardManager {
             }
             // 再尝试获取文本
             if let Ok(text) = c.get_text() {
+                // 检测是否是文件路径
+                if let Some(paths) = Self::detect_file_paths(&text) {
+                    return ClipboardContent::Files(paths);
+                }
                 return ClipboardContent::Text(text);
             }
         }

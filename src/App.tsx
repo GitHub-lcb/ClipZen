@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2, Info, Lock, Shield } from "lucide-react";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Database, Check, Clock, Loader2, Info, Lock, Shield, FileText, FolderOpen } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { useI18n } from "./hooks/useI18n";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -372,6 +372,11 @@ function App() {
                   )}
                   {item.item_type === "image" ? (
                     <img src={item.preview} alt="Image" className="w-full h-full object-cover rounded" />
+                  ) : item.item_type === "files" ? (
+                    <div className="flex flex-col items-center justify-center w-full h-full">
+                      <FolderOpen className="w-6 h-6 text-blue-500" />
+                      <span className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate px-1">{item.preview}</span>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-1">
                       {isProtected && (
@@ -440,6 +445,14 @@ function App() {
                         <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
                           <ImageIcon className="w-4 h-4" />
                           <span>{t('image.label')}</span>
+                        </div>
+                      ) : item.item_type === "files" ? (
+                        <div className="flex items-start gap-2">
+                          <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-2">{item.preview}</p>
+                            <p className="text-xs text-gray-400 mt-1">{item.content.split('\n').length} 个文件</p>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-start gap-2">

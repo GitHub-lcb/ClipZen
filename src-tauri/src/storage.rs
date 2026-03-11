@@ -141,6 +141,47 @@ impl Storage {
         Ok(id)
     }
 
+    /// 保存文件路径列表
+    pub fn save_files_item(&self, file_paths: &[String]) -> Result<String> {
+        let id = Uuid::new_v4().to_string();
+        let content = file_paths.join("\n");
+        
+        // 生成预览：显示文件名列表
+        let preview: String = file_paths
+            .iter()
+            .take(3)
+            .map(|p| {
+                std::path::Path::new(p)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| p.clone())
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let preview = if file_paths.len() > 3 {
+            format!("{}... ({} 个文件)", preview, file_paths.len())
+        } else {
+            preview
+        };
+        
+        self.conn.execute(
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            [
+                &id,
+                &"files".to_string(),
+                &content,
+                &preview,
+                &0.to_string(),
+                &0.to_string(),
+                &Utc::now().timestamp_millis().to_string(),
+                &file_paths.first().cloned().unwrap_or_default(),
+                &"[]".to_string(),
+            ],
+        )?;
+        Ok(id)
+    }
+
     #[allow(dead_code)]
     pub fn save_item(&self, item: &ClipboardItem) -> Result<()> {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());

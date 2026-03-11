@@ -127,6 +127,7 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
     let settings = SettingsManager::new();
     let mut last_text = String::new();
     let mut last_image_hash: Option<u64> = None;
+    let mut last_files_hash: Option<u64> = None;
 
     loop {
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -173,6 +174,26 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
                         let preview = format!("data:image/png;base64,{}", base64_encode(&image_data[..image_data.len().min(50000)]));
                         
                         let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap());
+                        let max_items = settings.load().max_history_items;
+                        let _ = storage.cleanup_old_items(max_items);
+                        let _ = handle.emit("clipboard-updated", ());
+                    }
+                }
+            }
+            crate::clipboard::ClipboardContent::Files(file_paths) => {
+                // 计算文件列表哈希以检测重复
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                file_paths.hash(&mut hasher);
+                let hash = hasher.finish();
+                
+                if last_files_hash != Some(hash) {
+                    last_files_hash = Some(hash);
+                    
+                    let content = file_paths.join("\n");
+                    if !storage.content_exists(&content).unwrap_or(false) {
+                        let _ = storage.save_files_item(&file_paths);
                         let max_items = settings.load().max_history_items;
                         let _ = storage.cleanup_old_items(max_items);
                         let _ = handle.emit("clipboard-updated", ());
