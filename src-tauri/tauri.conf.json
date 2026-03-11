@@ -36,9 +36,8 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/icon.ico",
       "icons/icon.png",
-      "icons/icon.svg"
+      "icons/icon.ico"
     ],
     "category": "Utility",
     "shortDescription": "小安剪贴板 - 快、稳、简单、隐私、离线",

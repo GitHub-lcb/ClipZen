@@ -119,25 +119,67 @@ pub fn run() {
 
 // 剪贴板监听循环
 fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
+    use std::fs;
+    use std::path::PathBuf;
+    
     let clipboard = ClipboardManager::new();
     let storage = Storage::new().expect("Failed to init storage");
     let settings = SettingsManager::new();
-    let mut last_content = String::new();
+    let mut last_text = String::new();
+    let mut last_image_hash: Option<u64> = None;
 
     loop {
         std::thread::sleep(std::time::Duration::from_millis(500));
         
-        if let Some(content) = clipboard.get_text() {
-            if content != last_content 
-                && !content.trim().is_empty()
-                && !storage.content_exists(&content).unwrap_or(false) 
-            {
-                last_content = content.clone();
-                let _ = storage.save_clipboard_item(&content);
-                let max_items = settings.load().max_history_items;
-                let _ = storage.cleanup_old_items(max_items);
-                let _ = handle.emit("clipboard-updated", ());
+        // 获取剪贴板内容（自动检测类型）
+        let content = clipboard.get_content();
+        
+        match content {
+            crate::clipboard::ClipboardContent::Text(text) => {
+                if text != last_text 
+                    && !text.trim().is_empty()
+                    && !storage.content_exists(&text).unwrap_or(false) 
+                {
+                    last_text = text.clone();
+                    let _ = storage.save_clipboard_item(&text);
+                    let max_items = settings.load().max_history_items;
+                    let _ = storage.cleanup_old_items(max_items);
+                    let _ = handle.emit("clipboard-updated", ());
+                }
             }
+            crate::clipboard::ClipboardContent::Image(image_data) => {
+                // 计算图片哈希以检测重复
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                image_data.hash(&mut hasher);
+                let hash = hasher.finish();
+                
+                if last_image_hash != Some(hash) {
+                    last_image_hash = Some(hash);
+                    
+                    // 保存图片到文件
+                    let images_dir = dirs::data_local_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("ClipZen")
+                        .join("images");
+                    fs::create_dir_all(&images_dir).ok();
+                    
+                    let timestamp = chrono::Utc::now().timestamp_millis();
+                    let file_path = images_dir.join(format!("{}.png", timestamp));
+                    
+                    if fs::write(&file_path, &image_data).is_ok() {
+                        // 生成预览（缩略图 base64）
+                        let preview = format!("data:image/png;base64,{}", base64_encode(&image_data[..image_data.len().min(50000)]));
+                        
+                        let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap());
+                        let max_items = settings.load().max_history_items;
+                        let _ = storage.cleanup_old_items(max_items);
+                        let _ = handle.emit("clipboard-updated", ());
+                    }
+                }
+            }
+            crate::clipboard::ClipboardContent::Empty => {}
         }
     }
 }
