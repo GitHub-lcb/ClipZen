@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { useI18n } from "./hooks/useI18n";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -81,6 +82,9 @@ function App() {
   const [unlockedItems, setUnlockedItems] = useState<Set<string>>(new Set());
   const [enablePasswordProtection, setEnablePasswordProtection] = useState(false);
   const [enableMaskedCopy, setEnableMaskedCopy] = useState(false);
+  const [sortBy, setSortBy] = useState<"time" | "type" | "content" | "popularity">("time");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const { items, loading, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -125,12 +129,44 @@ function App() {
         (item.tags || []).some(tag => tag.toLowerCase().includes(query))
       );
     }
-    return result;
-  }, [items, selectedTag, searchQuery]);
+    
+    // 排序逻辑
+    const sorted = [...result].sort((a, b) => {
+      // 置顶始终在前
+      if (a.pinned !== b.pinned) {
+        return a.pinned ? -1 : 1;
+      }
+      
+      const multiplier = sortOrder === "asc" ? 1 : -1;
+      
+      switch (sortBy) {
+        case "time":
+          return (a.created_at - b.created_at) * multiplier;
+        case "type":
+          const typeOrder = { image: 0, text: 1, files: 2 };
+          const typeDiff = (typeOrder[a.item_type as keyof typeof typeOrder] ?? 1) - 
+                          (typeOrder[b.item_type as keyof typeof typeOrder] ?? 1);
+          return typeDiff !== 0 ? typeDiff * multiplier : (a.created_at - b.created_at) * -1;
+        case "content":
+          const aContent = a.item_type === "image" ? "" : (a.preview || a.content).toLowerCase();
+          const bContent = b.item_type === "image" ? "" : (b.preview || b.content).toLowerCase();
+          return aContent.localeCompare(bContent, "zh-CN") * multiplier;
+        case "popularity":
+          const aCount = a.copy_count || 0;
+          const bCount = b.copy_count || 0;
+          const countDiff = aCount - bCount;
+          return countDiff !== 0 ? countDiff * multiplier : (a.created_at - b.created_at) * -1;
+        default:
+          return (a.created_at - b.created_at) * -1;
+      }
+    });
+    
+    return sorted;
+  }, [items, selectedTag, searchQuery, sortBy, sortOrder]);
 
   const pinnedItems = filteredItems.filter(item => item.pinned);
   const recentItems = filteredItems.filter(item => !item.pinned);
-  const allFilteredItems = [...pinnedItems, ...recentItems];
+  const allFilteredItems = filteredItems;
 
   const scrollToSelectedItem = useCallback(() => {
     if (selectedIndex < 0 || selectedIndex >= allFilteredItems.length) return;
@@ -202,11 +238,7 @@ function App() {
   }, [allFilteredItems, selectedIndex]);
 
   const handleCopyWithFeedback = async (item: ClipboardItem) => {
-    if (item.item_type === "image" && item.file_path) {
-      await copyToClipboard(item.content, "image", item.file_path);
-    } else {
-      await copyToClipboard(item.content);
-    }
+    await copyToClipboard(item);
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -282,7 +314,7 @@ function App() {
 
   const handleMaskedCopy = async (item: ClipboardItem) => {
     const maskedContent = getMaskedContent(item.content);
-    await copyToClipboard(maskedContent);
+    await invoke("copy_to_clipboard", { content: maskedContent });
     setCopiedId(item.id);
     setTimeout(() => setCopiedId(null), 1500);
   };
@@ -357,7 +389,55 @@ function App() {
             onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(-1); }}
           />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 relative">
+          <button 
+            onClick={() => setShowSortMenu(!showSortMenu)} 
+            className={`btn-icon ${showSortMenu ? 'bg-primary-light' : ''}`}
+            title={t('sort.title')}
+            style={showSortMenu ? { backgroundColor: 'var(--color-primary-light)' } : {}}
+          >
+            <ArrowUpDown className="w-4 h-4" />
+          </button>
+          {showSortMenu && (
+            <div 
+              className="absolute right-0 top-full mt-1 w-40 rounded-lg shadow-lg border z-50"
+              style={{ 
+                backgroundColor: 'var(--color-bg-card)',
+                borderColor: 'var(--color-border)'
+              }}
+            >
+              <div className="p-1">
+                {[
+                  { key: "time", label: t('sort.time') },
+                  { key: "type", label: t('sort.type') },
+                  { key: "content", label: t('sort.content') },
+                  { key: "popularity", label: t('sort.popularity') },
+                ].map(option => (
+                  <button
+                    key={option.key}
+                    onClick={() => {
+                      if (sortBy === option.key) {
+                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      } else {
+                        setSortBy(option.key as "time" | "type" | "content" | "popularity");
+                        setSortOrder("desc");
+                      }
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors"
+                    style={{ 
+                      color: sortBy === option.key ? 'var(--color-primary)' : 'var(--color-text)',
+                      backgroundColor: sortBy === option.key ? 'var(--color-primary-light)' : 'transparent'
+                    }}
+                  >
+                    <span>{option.label}</span>
+                    {sortBy === option.key && (
+                      sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <button 
             onClick={() => setSettingsOpen(true)} 
             className="btn-icon"
@@ -596,35 +676,24 @@ function App() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       {item.item_type === "image" ? (
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-center gap-3">
                           <div 
-                            className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:ring-2"
+                            className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden"
                             style={{ 
                               borderColor: 'var(--color-border)',
                               borderWidth: '1px'
                             }}
-                            onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}
                           >
                             <img 
                               src={item.preview} 
-                              alt="Image preview" 
+                              alt="Image" 
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 text-sm mb-1" style={{ color: 'var(--color-text-secondary)' }}>
-                              <ImageIcon className="w-4 h-4" />
-                              <span>{t('image.label')}</span>
-                            </div>
-                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('image.clickToCopy')}</p>
+                          <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            <Clock className="w-3 h-3" />
+                            <span>{formatTime(item.created_at)}</span>
                           </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}
-                            className="btn-icon"
-                            title={t('image.preview')}
-                          >
-                            <ImageIcon className="w-4 h-4" />
-                          </button>
                         </div>
                       ) : item.item_type === "files" ? (
                         <div className="flex items-start gap-2">
@@ -642,10 +711,12 @@ function App() {
                           <p className="text-sm line-clamp-3" style={{ color: 'var(--color-text)' }}>{getDisplayContent(item)}</p>
                         </div>
                       )}
-                      <div className="flex items-center gap-1 mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        <Clock className="w-3 h-3" />
-                        <span>{formatTime(item.created_at)}</span>
-                      </div>
+                      {item.item_type !== "image" && (
+                        <div className="flex items-center gap-1 mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          <Clock className="w-3 h-3" />
+                          <span>{formatTime(item.created_at)}</span>
+                        </div>
+                      )}
                       <div className="mt-3">
                         <TagManager itemId={item.id} currentTags={item.tags || []} onTagsChange={() => refresh()} t={t} />
                       </div>
@@ -662,6 +733,15 @@ function App() {
                           <Check className="w-3 h-3" />
                           {t('actions.copied')}
                         </span>
+                      )}
+                      {item.item_type === "image" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}
+                          className="btn-icon"
+                          title={t('image.preview')}
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
                       )}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}

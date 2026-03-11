@@ -100,6 +100,13 @@
     "clickToCopy": "Click to copy to clipboard",
     "preview": "Preview"
   },
+  "sort": {
+    "title": "Sort",
+    "time": "By Time",
+    "type": "By Type",
+    "content": "By Content",
+    "popularity": "By Popularity"
+  },
   "detail": {
     "title": "Details",
     "content": "Content",

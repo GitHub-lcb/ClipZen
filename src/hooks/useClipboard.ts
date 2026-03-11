@@ -13,6 +13,7 @@ export interface ClipboardItem {
   updated_at?: number;
   file_path?: string;
   tags?: string[];
+  copy_count?: number;
 }
 
 export function useClipboard() {
@@ -32,15 +33,18 @@ export function useClipboard() {
   }, []);
 
   // 复制到剪贴板
-  const copyToClipboard = useCallback(async (content: string, type: string = "text", filePath?: string) => {
+  const copyToClipboard = useCallback(async (item: ClipboardItem) => {
     try {
-      if (type === "image" && filePath) {
-        await invoke("copy_image_to_clipboard", { filePath });
+      if (item.item_type === "image") {
+        await invoke("copy_image", { itemId: item.id });
       } else {
-        await invoke("copy_to_clipboard", { content });
+        await invoke("copy_to_clipboard", { content: item.content });
       }
+      // 增加复制次数
+      await invoke("increment_copy_count", { id: item.id });
     } catch (error) {
       console.error("Failed to copy:", error);
+      throw error;
     }
   }, []);
 

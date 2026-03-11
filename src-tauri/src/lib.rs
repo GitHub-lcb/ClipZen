@@ -32,14 +32,16 @@ pub fn run() {
         .manage(settings.clone())
         .invoke_handler(tauri::generate_handler![
             commands::get_clipboard_history,
+            commands::get_clipboard_history_sorted,
             commands::save_to_history,
             commands::delete_history_item,
             commands::toggle_pin_item,
             commands::toggle_protected,
+            commands::increment_copy_count,
             commands::copy_to_clipboard,
             commands::copy_masked_content,
             commands::get_current_clipboard_content,
-            commands::copy_image_to_clipboard,
+            commands::copy_image,
             commands::get_settings,
             commands::save_settings,
             commands::export_history,
@@ -156,28 +158,35 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
                 let mut hasher = DefaultHasher::new();
                 image_data.hash(&mut hasher);
                 let hash = hasher.finish();
+                let hash_str = format!("{:016x}", hash);
                 
                 if last_image_hash != Some(hash) {
                     last_image_hash = Some(hash);
                     
-                    // 保存图片到文件
-                    let images_dir = dirs::data_local_dir()
-                        .unwrap_or_else(|| PathBuf::from("."))
-                        .join("ClipZen")
-                        .join("images");
-                    fs::create_dir_all(&images_dir).ok();
-                    
-                    let timestamp = chrono::Utc::now().timestamp_millis();
-                    let file_path = images_dir.join(format!("{}.png", timestamp));
-                    
-                    if fs::write(&file_path, &image_data).is_ok() {
-                        // 生成预览（缩略图 base64）
-                        let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(50000)]));
-                        
-                        let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap());
-                        let max_items = settings.load().max_history_items;
-                        let _ = storage.cleanup_old_items(max_items);
+                    // 检查数据库中是否已存在相同图片
+                    if storage.hash_exists(&hash_str).unwrap_or(false) {
+                        // 已存在，更新时间戳提升到顶部
+                        let _ = storage.update_item_timestamp_by_hash(&hash_str);
                         let _ = handle.emit("clipboard-updated", ());
+                    } else {
+                        // 不存在，保存新图片
+                        let images_dir = dirs::data_local_dir()
+                            .unwrap_or_else(|| PathBuf::from("."))
+                            .join("ClipZen")
+                            .join("images");
+                        fs::create_dir_all(&images_dir).ok();
+                        
+                        let timestamp = chrono::Utc::now().timestamp_millis();
+                        let file_path = images_dir.join(format!("{}.png", timestamp));
+                        
+                        if fs::write(&file_path, &image_data).is_ok() {
+                            let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(50000)]));
+                            
+                            let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap(), &hash_str);
+                            let max_items = settings.load().max_history_items;
+                            let _ = storage.cleanup_old_items(max_items);
+                            let _ = handle.emit("clipboard-updated", ());
+                        }
                     }
                 }
             }

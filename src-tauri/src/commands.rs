@@ -15,6 +15,16 @@ pub fn get_clipboard_history(storage: State<Arc<Mutex<Storage>>>) -> Vec<crate::
 }
 
 #[tauri::command]
+pub fn get_clipboard_history_sorted(
+    sort_by: String,
+    sort_order: String,
+    storage: State<Arc<Mutex<Storage>>>,
+) -> Vec<crate::storage::ClipboardItem> {
+    let storage = storage.lock().unwrap();
+    storage.get_items_sorted(&sort_by, &sort_order).unwrap_or_default()
+}
+
+#[tauri::command]
 pub fn save_to_history(
     content: String,
     _item_type: String,
@@ -53,6 +63,12 @@ pub fn toggle_protected(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool
 }
 
 #[tauri::command]
+pub fn increment_copy_count(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+    let storage = storage.lock().unwrap();
+    storage.increment_copy_count(&id).is_ok()
+}
+
+#[tauri::command]
 pub fn copy_to_clipboard(content: String, clipboard: State<Arc<Mutex<ClipboardManager>>>) -> bool {
     let clipboard = clipboard.lock().unwrap();
     clipboard.set_text(&content).is_ok()
@@ -81,22 +97,32 @@ pub fn get_current_clipboard_content(
             format!("text:{}", text)
         }
         ClipboardContent::Image(image_data) => {
-            // 保存图片到文件
-            let images_dir = dirs::data_local_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("clipzen")
-                .join("images");
-            fs::create_dir_all(&images_dir).ok();
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            image_data.hash(&mut hasher);
+            let hash = hasher.finish();
+            let hash_str = format!("{:016x}", hash);
             
-            let timestamp = chrono::Utc::now().timestamp_millis();
-            let file_path = images_dir.join(format!("{}.png", timestamp));
+            let storage = storage.lock().unwrap();
             
-            if fs::write(&file_path, &image_data).is_ok() {
-                // 生成缩略图（简化版：用原图）
-                let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(5000)]));
+            if storage.hash_exists(&hash_str).unwrap_or(false) {
+                let _ = storage.update_item_timestamp_by_hash(&hash_str);
+            } else {
+                let images_dir = dirs::data_local_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join("clipzen")
+                    .join("images");
+                fs::create_dir_all(&images_dir).ok();
                 
-                let storage = storage.lock().unwrap();
-                storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap()).ok();
+                let timestamp = chrono::Utc::now().timestamp_millis();
+                let file_path = images_dir.join(format!("{}.png", timestamp));
+                
+                if fs::write(&file_path, &image_data).is_ok() {
+                    let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(5000)]));
+                    
+                    let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap(), &hash_str);
+                }
             }
             "image".to_string()
         }
@@ -105,18 +131,43 @@ pub fn get_current_clipboard_content(
     }
 }
 
-/// 复制图片到剪贴板
+/// 复制图片到剪贴板（统一入口）
+/// 优先从文件路径读取，失败则从 base64 数据解码
 #[tauri::command]
-pub fn copy_image_to_clipboard(
-    file_path: String,
+pub fn copy_image(
+    item_id: String,
+    storage: State<Arc<Mutex<Storage>>>,
     clipboard: State<Arc<Mutex<ClipboardManager>>>,
-) -> bool {
-    let clipboard = clipboard.lock().unwrap();
-    if let Ok(image_data) = fs::read(&file_path) {
-        clipboard.set_image(&image_data).is_ok()
-    } else {
-        false
+) -> Result<(), String> {
+    let storage_guard = storage.lock().unwrap();
+    let items = storage_guard.get_all_items().map_err(|e| e.to_string())?;
+    let item = items.iter().find(|i| i.id == item_id)
+        .ok_or_else(|| "Item not found".to_string())?;
+    
+    if item.item_type != "image" {
+        return Err("Item is not an image".to_string());
     }
+    
+    let image_data: Vec<u8>;
+    
+    if let Some(ref file_path) = item.file_path {
+        if let Ok(data) = fs::read(file_path) {
+            image_data = data;
+        } else {
+            drop(storage_guard);
+            let decoded = crate::storage::base64_decode(&item.content)
+                .map_err(|e| format!("Failed to decode base64: {}", e))?;
+            image_data = decoded;
+        }
+    } else {
+        drop(storage_guard);
+        let decoded = crate::storage::base64_decode(&item.content)
+            .map_err(|e| format!("Failed to decode base64: {}", e))?;
+        image_data = decoded;
+    }
+    
+    let clipboard_guard = clipboard.lock().unwrap();
+    clipboard_guard.set_image(&image_data)
 }
 
 /// 获取设置

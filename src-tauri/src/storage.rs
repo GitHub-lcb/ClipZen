@@ -19,6 +19,7 @@ pub struct ClipboardItem {
     pub updated_at: Option<i64>, // 最后更新时间
     pub file_path: Option<String>, // 图片/文件存储路径
     pub tags: Vec<String>,  // 标签列表
+    pub copy_count: i32,    // 复制次数（热度）
 }
 
 pub struct Storage {
@@ -66,6 +67,24 @@ impl Storage {
         // 添加 protected 列（如果不存在）
         conn.execute(
             "ALTER TABLE clipboard_items ADD COLUMN protected INTEGER NOT NULL DEFAULT 0",
+            [],
+        ).ok();
+
+        // 添加 content_hash 列（用于去重）
+        conn.execute(
+            "ALTER TABLE clipboard_items ADD COLUMN content_hash TEXT",
+            [],
+        ).ok();
+
+        // 创建哈希索引以加速查询
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_content_hash ON clipboard_items(content_hash)",
+            [],
+        ).ok();
+
+        // 添加 copy_count 列（用于热度排序）
+        conn.execute(
+            "ALTER TABLE clipboard_items ADD COLUMN copy_count INTEGER NOT NULL DEFAULT 0",
             [],
         ).ok();
 
@@ -120,12 +139,12 @@ impl Storage {
     }
 
     /// 保存图片剪贴板
-    pub fn save_image_item(&self, image_data: &[u8], preview_base64: &str, file_path: &str) -> Result<String> {
+    pub fn save_image_item(&self, image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
         let id = Uuid::new_v4().to_string();
         
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             [
                 &id,
                 &"image".to_string(),
@@ -136,6 +155,7 @@ impl Storage {
                 &Utc::now().timestamp_millis().to_string(),
                 &file_path.to_string(),
                 &"[]".to_string(),
+                &content_hash.to_string(),
             ],
         )?;
         Ok(id)
@@ -207,9 +227,9 @@ impl Storage {
 
     pub fn get_all_items(&self) -> Result<Vec<ClipboardItem>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at 
+            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0) 
              FROM clipboard_items 
-             ORDER BY created_at DESC"
+             ORDER BY pinned DESC, created_at DESC"
         )?;
 
         let items = stmt.query_map([], |row| {
@@ -228,6 +248,7 @@ impl Storage {
                 file_path: row.get(7)?,
                 updated_at,
                 tags,
+                copy_count: row.get(10)?,
             })
         })?;
 
@@ -236,6 +257,64 @@ impl Storage {
             result.push(item?);
         }
         Ok(result)
+    }
+
+    /// 获取排序后的记录
+    pub fn get_items_sorted(&self, sort_by: &str, sort_order: &str) -> Result<Vec<ClipboardItem>> {
+        let order_clause = match (sort_by, sort_order) {
+            ("time", "asc") => "ORDER BY pinned DESC, created_at ASC",
+            ("time", "desc") => "ORDER BY pinned DESC, created_at DESC",
+            ("type", "asc") => "ORDER BY pinned DESC, item_type ASC, created_at DESC",
+            ("type", "desc") => "ORDER BY pinned DESC, item_type DESC, created_at DESC",
+            ("content", "asc") => "ORDER BY pinned DESC, preview ASC, created_at DESC",
+            ("content", "desc") => "ORDER BY pinned DESC, preview DESC, created_at DESC",
+            ("popularity", "asc") => "ORDER BY pinned DESC, COALESCE(copy_count, 0) ASC, created_at DESC",
+            ("popularity", "desc") => "ORDER BY pinned DESC, COALESCE(copy_count, 0) DESC, created_at DESC",
+            _ => "ORDER BY pinned DESC, created_at DESC",
+        };
+
+        let sql = format!(
+            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0) 
+             FROM clipboard_items 
+             {}", order_clause
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+
+        let items = stmt.query_map([], |row| {
+            let tags_str: String = row.get(8)?;
+            let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+            let updated_at: Option<i64> = row.get(9).ok();
+            
+            Ok(ClipboardItem {
+                id: row.get(0)?,
+                item_type: row.get(1)?,
+                content: row.get(2)?,
+                preview: row.get(3)?,
+                pinned: row.get::<_, i32>(4)? == 1,
+                protected: row.get::<_, i32>(5)? == 1,
+                created_at: row.get(6)?,
+                file_path: row.get(7)?,
+                updated_at,
+                tags,
+                copy_count: row.get(10)?,
+            })
+        })?;
+
+        let mut result = Vec::new();
+        for item in items {
+            result.push(item?);
+        }
+        Ok(result)
+    }
+
+    /// 增加复制次数
+    pub fn increment_copy_count(&self, id: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE clipboard_items SET copy_count = COALESCE(copy_count, 0) + 1 WHERE id = ?1",
+            [id],
+        )?;
+        Ok(())
     }
 
     pub fn delete_item(&self, id: &str) -> Result<()> {
@@ -269,6 +348,24 @@ impl Storage {
         )?;
         let count: i32 = stmt.query_row([content], |row| row.get(0))?;
         Ok(count > 0)
+    }
+
+    /// 检查哈希是否已存在（用于图片去重）
+    pub fn hash_exists(&self, hash: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*) FROM clipboard_items WHERE content_hash = ?1"
+        )?;
+        let count: i32 = stmt.query_row([hash], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
+    /// 更新已存在记录的时间戳（用于去重时提升到顶部）
+    pub fn update_item_timestamp_by_hash(&self, hash: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE clipboard_items SET created_at = ?1 WHERE content_hash = ?2",
+            [Utc::now().timestamp_millis().to_string(), hash.to_string()],
+        )?;
+        Ok(())
     }
 
     /// 导入单条记录（用于批量导入）
@@ -369,4 +466,39 @@ pub fn base64_encode(data: &[u8]) -> String {
         i += 3;
     }
     result
+}
+
+/// 简单的 base64 解码
+pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
+    const DECODE_TABLE: [i8; 128] = [
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+        -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+        -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+    ];
+    
+    let input = input.trim_end_matches('=');
+    let mut result = Vec::new();
+    let mut buf = 0u32;
+    let mut bits = 0;
+    
+    for c in input.chars() {
+        let val = if c.is_ascii() { DECODE_TABLE[c as usize] } else { -1 };
+        if val < 0 {
+            return Err("Invalid base64 character".to_string());
+        }
+        buf = (buf << 6) | (val as u32);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            result.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    
+    Ok(result)
 }
