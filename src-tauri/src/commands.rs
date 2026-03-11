@@ -217,7 +217,11 @@ pub fn clear_all_history(
     
     let mut deleted = 0;
     for item in items {
+        // 保留置顶记录和带标签的记录
         if keep_pinned && item.pinned {
+            continue;
+        }
+        if !item.tags.is_empty() {
             continue;
         }
         // 删除文件（如果是图片）
