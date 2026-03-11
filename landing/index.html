@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClipZen — 静默高效的剪贴板管家</title>
+  <meta name="description" content="快、稳、简单、隐私、离线 —— 你的本地剪贴板管家">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #FAF8F3;
+      --bg-warm: #F5F2EB;
+      --fg: #1A1A1A;
+      --muted: #6B6B6B;
+      --accent: #C9A227;
+      --accent-light: rgba(201, 162, 39, 0.15);
+      --border: rgba(26, 26, 26, 0.08);
+      --shadow: rgba(26, 26, 26, 0.06);
+      
+      --font-display: 'Fraunces', serif;
+      --font-body: 'Outfit', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Custom cursor */
+    body {
+      cursor: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='10' cy='10' r='8' stroke='%23C9A227' stroke-width='1.5' fill='none'/%3E%3C/svg%3E") 10 10, auto;
+    }
+
+    a, button {
+      cursor: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%23C9A227' stroke-width='2' fill='%23C9A227' fill-opacity='0.1'/%3E%3C/svg%3E") 12 12, pointer;
+    }
+
+    /* Zen sand pattern background */
+    .zen-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .sand-line {
+      position: absolute;
+      height: 1px;
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(201, 162, 39, 0.3) 20%, 
+        rgba(201, 162, 39, 0.5) 50%, 
+        rgba(201, 162, 39, 0.3) 80%, 
+        transparent 100%
+      );
+      animation: sandFlow 20s ease-in-out infinite;
+    }
+
+    @keyframes sandFlow {
+      0%, 100% { transform: translateX(-5%) scaleX(1); opacity: 0.3; }
+      50% { transform: translateX(5%) scaleX(1.1); opacity: 0.6; }
+    }
+
+    /* Noise texture overlay */
+    .noise {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+
+    /* Content wrapper */
+    .content {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      background: linear-gradient(to bottom, var(--bg) 60%, transparent);
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--fg);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--fg);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--bg);
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2.5rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 400;
+      transition: color 0.3s ease;
+      position: relative;
+    }
+
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 0;
+      height: 1px;
+      background: var(--accent);
+      transition: width 0.3s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--fg);
+    }
+
+    .nav-links a:hover::after {
+      width: 100%;
+    }
+
+    .nav-cta {
+      padding: 0.6rem 1.5rem;
+      background: var(--fg);
+      color: var(--bg);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-cta:hover {
+      background: transparent;
+      color: var(--fg);
+      border-color: var(--fg);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 8rem 2rem 4rem;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--accent-light);
+      border-radius: 100px;
+      font-size: 0.85rem;
+      color: var(--accent);
+      margin-bottom: 2rem;
+      animation: fadeIn 1s ease-out 0.2s both;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero h1 {
+      font-family: var(--font-display);
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 300;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      animation: fadeIn 1s ease-out 0.4s both;
+    }
+
+    .hero h1 span {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1.1rem, 2vw, 1.35rem);
+      color: var(--muted);
+      max-width: 540px;
+      margin-bottom: 3rem;
+      font-weight: 300;
+      animation: fadeIn 1s ease-out 0.6s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      animation: fadeIn 1s ease-out 0.8s both;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 2rem;
+      background: var(--fg);
+      color: var(--bg);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 500;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(201, 162, 39, 0.3);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 1rem 2rem;
+      background: transparent;
+      color: var(--fg);
+      text-decoration: none;
+      font-size: 1rem;
+      font-weight: 400;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--fg);
+      background: rgba(26, 26, 26, 0.02);
+    }
+
+    .hero-visual {
+      margin-top: 5rem;
+      animation: fadeIn 1s ease-out 1s both;
+    }
+
+    /* App preview mockup */
+    .mockup {
+      position: relative;
+      width: 600px;
+      max-width: 90vw;
+      aspect-ratio: 4/3;
+      background: var(--fg);
+      border-radius: 16px;
+      box-shadow: 
+        0 50px 100px -20px rgba(26, 26, 26, 0.25),
+        0 30px 60px -30px rgba(26, 26, 26, 0.3);
+      overflow: hidden;
+    }
+
+    .mockup-header {
+      height: 40px;
+      background: rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      gap: 0.5rem;
+    }
+
+    .mockup-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+    }
+
+    .mockup-content {
+      padding: 1.5rem;
+    }
+
+    .mockup-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+      transition: all 0.3s ease;
+    }
+
+    .mockup-item:hover {
+      background: rgba(255,255,255,0.08);
+      transform: translateX(4px);
+    }
+
+    .mockup-item-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      color: var(--fg);
+    }
+
+    .mockup-item-text {
+      flex: 1;
+    }
+
+    .mockup-item-title {
+      color: rgba(255,255,255,0.9);
+      font-size: 0.95rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .mockup-item-time {
+      color: rgba(255,255,255,0.4);
+      font-size: 0.8rem;
+    }
+
+    .mockup-item-pin {
+      color: var(--accent);
+      font-size: 1.2rem;
+    }
+
+    /* Stats section */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 4rem;
+      padding: 4rem 2rem;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-warm);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 3.5rem;
+      font-weight: 300;
+      color: var(--fg);
+      letter-spacing: -0.02em;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    /* Features section */
+    .features {
+      padding: 8rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 5rem;
+    }
+
+    .section-tag {
+      font-size: 0.85rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 300;
+      letter-spacing: -0.02em;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .feature-card {
+      padding: 2.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      transition: all 0.4s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transition: transform 0.4s ease;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(201, 162, 39, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(26, 26, 26, 0.08);
+    }
+
+    .feature-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent-light);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .feature-title {
+      font-family: var(--font-display);
+      font-size: 1.35rem;
+      font-weight: 400;
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-desc {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.7;
+    }
+
+    /* Shortcuts section */
+    .shortcuts {
+      padding: 6rem 2rem;
+      background: var(--fg);
+      color: var(--bg);
+    }
+
+    .shortcuts .section-tag {
+      color: var(--accent);
+    }
+
+    .shortcuts .section-title {
+      color: var(--bg);
+    }
+
+    .shortcuts-grid {
+      display: flex;
+      justify-content: center;
+      gap: 3rem;
+      flex-wrap: wrap;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .shortcut-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .shortcut-keys {
+      display: flex;
+      gap: 0.25rem;
+    }
+
+    .key {
+      padding: 0.5rem 0.75rem;
+      background: rgba(255,255,255,0.1);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .shortcut-desc {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.9rem;
+    }
+
+    /* Download section */
+    .download {
+      padding: 8rem 2rem;
+      text-align: center;
+    }
+
+    .download-options {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 3rem;
+    }
+
+    .download-btn {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1.25rem 2rem;
+      background: var(--bg-warm);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      text-decoration: none;
+      color: var(--fg);
+      transition: all 0.3s ease;
+    }
+
+    .download-btn:hover {
+      border-color: var(--fg);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(26, 26, 26, 0.1);
+    }
+
+    .download-icon {
+      font-size: 2rem;
+    }
+
+    .download-info {
+      text-align: left;
+    }
+
+    .download-platform {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .download-size {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Footer */
+    footer {
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .footer-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.3s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--fg);
+    }
+
+    .footer-copy {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      nav {
+        padding: 1rem 1.5rem;
+      }
+
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        padding: 6rem 1.5rem 3rem;
+      }
+
+      .stats {
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .features {
+        padding: 5rem 1.5rem;
+      }
+
+      .shortcuts-grid {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+
+    /* Scroll animations */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: all 0.8s ease;
+    }
+
+    .reveal.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <!-- Zen background -->
+  <div class="zen-bg" id="zenBg"></div>
+  <div class="noise"></div>
+
+  <div class="content">
+    <!-- Navigation -->
+    <nav>
+      <a href="#" class="logo">
+        <div class="logo-icon">Z</div>
+        ClipZen
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">特性</a></li>
+        <li><a href="#shortcuts">快捷键</a></li>
+        <li><a href="#download">下载</a></li>
+        <li><a href="https://github.com/GitHub-lcb/ClipZen" target="_blank">GitHub</a></li>
+      </ul>
+      <a href="#download" class="nav-cta">免费下载</a>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-badge">
+        <span>v0.1.0 · 开源免费</span>
+      </div>
+      <h1>静默<span>高效</span>的<br>剪贴板管家</h1>
+      <p class="hero-subtitle">
+        快、稳、简单、隐私、离线。一切尽在掌控，不打扰你的工作流。
+      </p>
+      <div class="hero-actions">
+        <a href="#download" class="btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          立即下载
+        </a>
+        <a href="https://github.com/GitHub-lcb/ClipZen" class="btn-secondary" target="_blank">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          查看源码
+        </a>
+      </div>
+      
+      <div class="hero-visual">
+        <div class="mockup">
+          <div class="mockup-header">
+            <div class="mockup-dot"></div>
+            <div class="mockup-dot"></div>
+            <div class="mockup-dot"></div>
+          </div>
+          <div class="mockup-content">
+            <div class="mockup-item">
+              <div class="mockup-item-icon">📋</div>
+              <div class="mockup-item-text">
+                <div class="mockup-item-title">https://github.com/GitHub-lcb/ClipZen</div>
+                <div class="mockup-item-time">刚刚</div>
+              </div>
+              <span class="mockup-item-pin">📌</span>
+            </div>
+            <div class="mockup-item">
+              <div class="mockup-item-icon">📝</div>
+              <div class="mockup-item-text">
+                <div class="mockup-item-title">npm install -g @anthropic-ai/claude-code</div>
+                <div class="mockup-item-time">5 分钟前</div>
+              </div>
+            </div>
+            <div class="mockup-item">
+              <div class="mockup-item-icon">💡</div>
+              <div class="mockup-item-text">
+                <div class="mockup-item-title">记得提交代码前先 pull 最新分支</div>
+                <div class="mockup-item-time">1 小时前</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+      <div class="stat">
+        <div class="stat-value">&lt;100ms</div>
+        <div class="stat-label">启动速度</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">&lt;10MB</div>
+        <div class="stat-label">安装包大小</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">0</div>
+        <div class="stat-label">数据上传云端</div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+      <div class="section-header reveal">
+        <div class="section-tag">特性</div>
+        <h2 class="section-title">简单，但足够强大</h2>
+      </div>
+      
+      <div class="features-grid">
+        <div class="feature-card reveal">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">隐私优先</h3>
+          <p class="feature-desc">纯本地存储，无云同步，无数据上传。你的剪贴板历史只属于你。</p>
+        </div>
+        
+        <div class="feature-card reveal">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-title">极速响应</h3>
+          <p class="feature-desc">从按键到显示 &lt;100ms，几乎感觉不到延迟。不打断你的工作流。</p>
+        </div>
+        
+        <div class="feature-card reveal">
+          <div class="feature-icon">🔍</div>
+          <h3 class="feature-title">智能搜索</h3>
+          <p class="feature-desc">全文搜索 + 标签过滤 + 类型筛选，海量历史也能秒速找到。</p>
+        </div>
+        
+        <div class="feature-card reveal">
+          <div class="feature-icon">📌</div>
+          <h3 class="feature-title">常用置顶</h3>
+          <p class="feature-desc">收藏常用片段，一键访问。再也不会丢重要内容。</p>
+        </div>
+        
+        <div class="feature-card reveal">
+          <div class="feature-icon">🏷️</div>
+          <h3 class="feature-title">标签管理</h3>
+          <p class="feature-desc">给记录打标签，分类管理。清空时带标签的记录会被保留。</p>
+        </div>
+        
+        <div class="feature-card reveal">
+          <div class="feature-icon">🌙</div>
+          <h3 class="feature-title">暗色模式</h3>
+          <p class="feature-desc">支持深色/浅色主题切换，保护眼睛，夜间使用更舒适。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shortcuts -->
+    <section class="shortcuts" id="shortcuts">
+      <div class="section-header reveal">
+        <div class="section-tag">快捷键</div>
+        <h2 class="section-title">手不离键盘，效率翻倍</h2>
+      </div>
+      
+      <div class="shortcuts-grid reveal">
+        <div class="shortcut-item">
+          <div class="shortcut-keys">
+            <span class="key">Ctrl</span>
+            <span class="key">Shift</span>
+            <span class="key">V</span>
+          </div>
+          <span class="shortcut-desc">呼出/隐藏窗口</span>
+        </div>
+        
+        <div class="shortcut-item">
+          <div class="shortcut-keys">
+            <span class="key">↑</span>
+            <span class="key">↓</span>
+          </div>
+          <span class="shortcut-desc">选择记录</span>
+        </div>
+        
+        <div class="shortcut-item">
+          <div class="shortcut-keys">
+            <span class="key">Enter</span>
+          </div>
+          <span class="shortcut-desc">复制选中项</span>
+        </div>
+        
+        <div class="shortcut-item">
+          <div class="shortcut-keys">
+            <span class="key">Delete</span>
+          </div>
+          <span class="shortcut-desc">删除选中项</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section class="download" id="download">
+      <div class="section-header reveal">
+        <div class="section-tag">下载</div>
+        <h2 class="section-title">开始使用 ClipZen</h2>
+      </div>
+      
+      <div class="download-options reveal">
+        <a href="#" class="download-btn">
+          <span class="download-icon">🐧</span>
+          <div class="download-info">
+            <div class="download-platform">Linux (.deb)</div>
+            <div class="download-size">6.6 MB</div>
+          </div>
+        </a>
+        
+        <a href="#" class="download-btn">
+          <span class="download-icon">🐧</span>
+          <div class="download-info">
+            <div class="download-platform">Linux (.AppImage)</div>
+            <div class="download-size">77 MB</div>
+          </div>
+        </a>
+        
+        <a href="#" class="download-btn">
+          <span class="download-icon">🪟</span>
+          <div class="download-info">
+            <div class="download-platform">Windows</div>
+            <div class="download-size">即将推出</div>
+          </div>
+        </a>
+        
+        <a href="#" class="download-btn">
+          <span class="download-icon">🍎</span>
+          <div class="download-info">
+            <div class="download-platform">macOS</div>
+            <div class="download-size">即将推出</div>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-links">
+        <a href="https://github.com/GitHub-lcb/ClipZen" target="_blank">GitHub</a>
+        <a href="https://github.com/GitHub-lcb/ClipZen/issues" target="_blank">反馈问题</a>
+        <a href="https://github.com/GitHub-lcb/ClipZen/blob/main/LICENSE" target="_blank">MIT License</a>
+      </div>
+      <p class="footer-copy">Made with 🦞 by lcb</p>
+    </footer>
+  </div>
+
+  <script>
+    // Generate zen sand lines
+    function createZenBg() {
+      const container = document.getElementById('zenBg');
+      const lineCount = 30;
+      
+      for (let i = 0; i < lineCount; i++) {
+        const line = document.createElement('div');
+        line.className = 'sand-line';
+        line.style.top = `${(i / lineCount) * 100}%`;
+        line.style.width = `${50 + Math.random() * 50}%`;
+        line.style.left = `${Math.random() * 30}%`;
+        line.style.animationDelay = `${Math.random() * 10}s`;
+        line.style.animationDuration = `${15 + Math.random() * 10}s`;
+        container.appendChild(line);
+      }
+    }
+    
+    createZenBg();
+
+    // Scroll reveal
+    function reveal() {
+      const reveals = document.querySelectorAll('.reveal');
+      
+      reveals.forEach(element => {
+        const windowHeight = window.innerHeight;
+        const elementTop = element.getBoundingClientRect().top;
+        const elementVisible = 150;
+        
+        if (elementTop < windowHeight - elementVisible) {
+          element.classList.add('active');
+        }
+      });
+    }
+
+    window.addEventListener('scroll', reveal);
+    reveal(); // Initial check
+  </script>
+</body>
+</html>
