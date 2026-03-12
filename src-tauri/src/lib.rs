@@ -8,16 +8,19 @@ mod storage;
 mod commands;
 mod window;
 mod settings;
+mod license;
 
 use clipboard::ClipboardManager;
 use storage::Storage;
 use settings::SettingsManager;
+use license::LicenseManager;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 pub fn run() {
     let clipboard = Arc::new(Mutex::new(ClipboardManager::new()));
     let storage = Arc::new(Mutex::new(Storage::new().expect("Failed to init storage")));
     let settings = Arc::new(Mutex::new(SettingsManager::new()));
+    let license = Arc::new(Mutex::new(LicenseManager::new()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -30,6 +33,7 @@ pub fn run() {
         .manage(clipboard.clone())
         .manage(storage.clone())
         .manage(settings.clone())
+        .manage(license.clone())
         .invoke_handler(tauri::generate_handler![
             commands::get_clipboard_history,
             commands::get_clipboard_history_sorted,
@@ -57,6 +61,10 @@ pub fn run() {
             commands::verify_password,
             commands::has_global_password,
             commands::get_image_data,
+            commands::activate_license,
+            commands::get_license_info,
+            commands::deactivate_license,
+            commands::generate_license_codes,
         ])
         .setup(|app| {
             // 启动剪贴板监听

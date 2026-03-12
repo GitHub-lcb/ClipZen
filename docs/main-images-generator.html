@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipZen 淘宝主图生成器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #1a1a2e;
+            padding: 40px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1700px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 2em;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .card-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .download-btn {
+            display: block;
+            width: 100%;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            text-align: center;
+            text-decoration: none;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+        }
+        .info {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            color: #fff;
+            margin-top: 40px;
+        }
+        .info h3 {
+            margin-bottom: 12px;
+            color: #667eea;
+        }
+        .info ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦞 小安剪贴板 ClipZen Pro - 淘宝主图</h1>
+        
+        <div class="grid">
+            <!-- 主图 1 - 封面 -->
+            <div class="card">
+                <div class="card-header">主图 1 - 产品封面</div>
+                <canvas id="cover" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('cover')">下载主图 1</button>
+            </div>
+            
+            <!-- 主图 2 - 核心功能 -->
+            <div class="card">
+                <div class="card-header">主图 2 - 核心功能</div>
+                <canvas id="features" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('features')">下载主图 2</button>
+            </div>
+            
+            <!-- 主图 3 - 效率提升 -->
+            <div class="card">
+                <div class="card-header">主图 3 - 效率提升</div>
+                <canvas id="efficiency" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('efficiency')">下载主图 3</button>
+            </div>
+            
+            <!-- 主图 4 - 隐私安全 -->
+            <div class="card">
+                <div class="card-header">主图 4 - 隐私安全</div>
+                <canvas id="privacy" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('privacy')">下载主图 4</button>
+            </div>
+            
+            <!-- 主图 5 - 版本对比 -->
+            <div class="card">
+                <div class="card-header">主图 5 - 版本对比</div>
+                <canvas id="pricing" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('pricing')">下载主图 5</button>
+            </div>
+            
+            <!-- 主图 6 - 应用场景 -->
+            <div class="card">
+                <div class="card-header">主图 6 - 应用场景</div>
+                <canvas id="scenarios" width="800" height="800"></canvas>
+                <button class="download-btn" onclick="download('scenarios')">下载主图 6</button>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h3>📐 图片规格</h3>
+            <ul>
+                <li>尺寸：800x800 像素 (淘宝主图标准)</li>
+                <li>格式：PNG (透明背景兼容)</li>
+                <li>大小：单张 < 500KB</li>
+                <li>点击"下载"按钮保存到本地</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function download(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `clipzen_main_${canvasId}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // 主图 1 - 产品封面
+        const cover = document.getElementById('cover');
+        const ctx1 = cover.getContext('2d');
+        
+        // 背景渐变
+        const gradient1 = ctx1.createLinearGradient(0, 0, 800, 800);
+        gradient1.addColorStop(0, '#1E3A8A');
+        gradient1.addColorStop(0.5, '#3B82F6');
+        gradient1.addColorStop(1, '#60A5FA');
+        ctx1.fillStyle = gradient1;
+        ctx1.fillRect(0, 0, 800, 800);
+        
+        // 装饰圆圈
+        ctx1.beginPath();
+        ctx1.arc(700, 100, 150, 0, Math.PI * 2);
+        ctx1.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx1.fill();
+        
+        ctx1.beginPath();
+        ctx1.arc(100, 700, 200, 0, Math.PI * 2);
+        ctx1.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx1.fill();
+        
+        // 中央图标区域
+        ctx1.beginPath();
+        ctx1.roundRect(250, 200, 300, 300, 40);
+        ctx1.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx1.fill();
+        ctx1.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx1.lineWidth = 3;
+        ctx1.stroke();
+        
+        // 剪贴板图标 (简化)
+        ctx1.fillStyle = '#fff';
+        ctx1.fillRect(340, 260, 120, 180, 20);
+        ctx1.fillRect(370, 240, 60, 40, 8);
+        
+        // 标题
+        ctx1.fillStyle = '#fff';
+        ctx1.font = 'bold 52px -apple-system, sans-serif';
+        ctx1.textAlign = 'center';
+        ctx1.fillText('小安剪贴板 Pro', 400, 580);
+        
+        // 副标题
+        ctx1.font = '28px -apple-system, sans-serif';
+        ctx1.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx1.fillText('一键呼出 · 极速复制 · 隐私安全', 400, 640);
+        
+        // 平台标识
+        ctx1.font = '18px -apple-system, sans-serif';
+        ctx1.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx1.fillText('Windows · macOS · Linux', 400, 700);
+        
+        // 价格标签
+        ctx1.beginPath();
+        ctx1.arc(680, 680, 80, 0, Math.PI * 2);
+        ctx1.fillStyle = '#F59E0B';
+        ctx1.fill();
+        ctx1.fillStyle = '#fff';
+        ctx1.font = 'bold 36px -apple-system, sans-serif';
+        ctx1.textAlign = 'center';
+        ctx1.fillText('¥29.9', 680, 690);
+
+        // 主图 2 - 核心功能
+        const features = document.getElementById('features');
+        const ctx2 = features.getContext('2d');
+        
+        const gradient2 = ctx2.createLinearGradient(0, 0, 800, 800);
+        gradient2.addColorStop(0, '#0F172A');
+        gradient2.addColorStop(1, '#1E293B');
+        ctx2.fillStyle = gradient2;
+        ctx2.fillRect(0, 0, 800, 800);
+        
+        // 标题
+        ctx2.fillStyle = '#fff';
+        ctx2.font = 'bold 48px -apple-system, sans-serif';
+        ctx2.textAlign = 'center';
+        ctx2.fillText('✨ 核心功能', 400, 100);
+        
+        // 功能列表背景
+        ctx2.fillStyle = 'rgba(255,255,255,0.05)';
+        ctx2.fillRect(100, 150, 600, 550);
+        
+        // 功能项
+        const featuresList = [
+            { icon: '📋', text: '剪贴板历史记录，不再丢失重要内容' },
+            { icon: '🔍', text: '全文搜索，快速定位' },
+            { icon: '📁', text: '图片/文本/文件，全支持' },
+            { icon: '🔐', text: '加密保护，隐私安全' },
+            { icon: '⚡', text: '自动记录，无需手动保存' }
+        ];
+        
+        featuresList.forEach((feature, i) => {
+            const y = 220 + i * 100;
+            
+            // 图标背景
+            ctx2.beginPath();
+            ctx2.arc(180, y, 45, 0, Math.PI * 2);
+            ctx2.fillStyle = `hsl(${210 + i * 30}, 70%, 60%)`;
+            ctx2.fill();
+            
+            // 图标
+            ctx2.font = '28px sans-serif';
+            ctx2.textAlign = 'center';
+            ctx2.fillStyle = '#fff';
+            ctx2.fillText(feature.icon, 180, y + 10);
+            
+            // 文字
+            ctx2.font = '24px -apple-system, sans-serif';
+            ctx2.textAlign = 'left';
+            ctx2.fillText(feature.text, 260, y + 8);
+        });
+
+        // 主图 3 - 效率提升
+        const efficiency = document.getElementById('efficiency');
+        const ctx3 = efficiency.getContext('2d');
+        
+        const gradient3 = ctx3.createLinearGradient(0, 0, 0, 800);
+        gradient3.addColorStop(0, '#134E4A');
+        gradient3.addColorStop(1, '#0D9488');
+        ctx3.fillStyle = gradient3;
+        ctx3.fillRect(0, 0, 800, 800);
+        
+        // 标题
+        ctx3.fillStyle = '#fff';
+        ctx3.font = 'bold 56px -apple-system, sans-serif';
+        ctx3.textAlign = 'center';
+        ctx3.fillText('🚀 效率翻倍', 400, 120);
+        
+        // 快捷键展示
+        ctx3.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx3.fillRect(200, 180, 400, 120, 20);
+        ctx3.fillStyle = '#fff';
+        ctx3.font = 'bold 32px monospace';
+        ctx3.textAlign = 'center';
+        ctx3.fillText('Ctrl + Shift + V', 400, 260);
+        
+        // 效率提升点
+        const efficiencyPoints = [
+            '一键呼出，不打断工作流',
+            '自动记录，无需手动保存',
+            '置顶常用，快速访问',
+            '标签分类，井井有条'
+        ];
+        
+        efficiencyPoints.forEach((point, i) => {
+            const y = 360 + i * 90;
+            ctx3.font = 'bold 26px -apple-system, sans-serif';
+            ctx3.fillStyle = '#10B981';
+            ctx3.textAlign = 'left';
+            ctx3.fillText('✓', 220, y + 8);
+            ctx3.fillStyle = '#fff';
+            ctx3.font = '24px -apple-system, sans-serif';
+            ctx3.fillText(point, 270, y + 8);
+        });
+        
+        // 底部强调
+        ctx3.fillStyle = '#FCD34D';
+        ctx3.font = 'bold 28px -apple-system, sans-serif';
+        ctx3.textAlign = 'center';
+        ctx3.fillText('每天节省 30 分钟！', 400, 740);
+
+        // 主图 4 - 隐私安全
+        const privacy = document.getElementById('privacy');
+        const ctx4 = privacy.getContext('2d');
+        
+        const gradient4 = ctx4.createRadialGradient(400, 400, 100, 400, 400, 500);
+        gradient4.addColorStop(0, '#1E1B4B');
+        gradient4.addColorStop(1, '#312E81');
+        ctx4.fillStyle = gradient4;
+        ctx4.fillRect(0, 0, 800, 800);
+        
+        // 标题
+        ctx4.fillStyle = '#fff';
+        ctx4.font = 'bold 56px -apple-system, sans-serif';
+        ctx4.textAlign = 'center';
+        ctx4.fillText('🔒 隐私至上', 400, 120);
+        
+        // 锁图标
+        ctx4.fillStyle = '#818CF8';
+        ctx4.beginPath();
+        ctx4.arc(400, 320, 120, 0, Math.PI * 2);
+        ctx4.fill();
+        
+        ctx4.fillStyle = '#1E1B4B';
+        ctx4.fillRect(340, 280, 120, 100, 15);
+        ctx4.fillRect(370, 240, 60, 60, 10);
+        
+        // 安全特性
+        const securityFeatures = [
+            { icon: '✓', text: '100% 本地存储，不上传云端' },
+            { icon: '✓', text: '可选密码加密' },
+            { icon: '✓', text: '开源可审计' },
+            { icon: '✓', text: '离线也能用' }
+        ];
+        
+        securityFeatures.forEach((feature, i) => {
+            const y = 500 + i * 65;
+            ctx4.font = 'bold 22px -apple-system, sans-serif';
+            ctx4.fillStyle = '#A5B4FC';
+            ctx4.textAlign = 'left';
+            ctx4.fillText(feature.icon, 220, y);
+            ctx4.fillStyle = '#fff';
+            ctx4.font = '22px -apple-system, sans-serif';
+            ctx4.fillText(feature.text, 260, y);
+        });
+        
+        // 底部标语
+        ctx4.fillStyle = '#C7D2FE';
+        ctx4.font = '20px -apple-system, sans-serif';
+        ctx4.textAlign = 'center';
+        ctx4.fillText('您的数据，只属于您', 400, 740);
+
+        // 主图 5 - 版本对比
+        const pricing = document.getElementById('pricing');
+        const ctx5 = pricing.getContext('2d');
+        
+        const gradient5 = ctx5.createLinearGradient(0, 0, 800, 800);
+        gradient5.addColorStop(0, '#7C2D12');
+        gradient5.addColorStop(1, '#EA580C');
+        ctx5.fillStyle = gradient5;
+        ctx5.fillRect(0, 0, 800, 800);
+        
+        // 标题
+        ctx5.fillStyle = '#fff';
+        ctx5.font = 'bold 48px -apple-system, sans-serif';
+        ctx5.textAlign = 'center';
+        ctx5.fillText('📊 版本对比', 400, 90);
+        
+        // 免费版
+        ctx5.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx5.fillRect(80, 150, 280, 280, 20);
+        ctx5.fillStyle = '#fff';
+        ctx5.font = 'bold 28px -apple-system, sans-serif';
+        ctx5.textAlign = 'center';
+        ctx5.fillText('免费版', 220, 200);
+        ctx5.font = 'bold 36px -apple-system, sans-serif';
+        ctx5.fillText('¥0', 220, 250);
+        
+        ctx5.font = '18px -apple-system, sans-serif';
+        ctx5.textAlign = 'left';
+        const freeFeatures = ['基础记录', '搜索功能', '7 天历史'];
+        freeFeatures.forEach((f, i) => {
+            ctx5.fillText('✓ ' + f, 120, 310 + i * 35);
+        });
+        
+        // Pro 版 (高亮)
+        ctx5.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx5.fillRect(440, 150, 280, 280, 20);
+        ctx5.strokeStyle = '#FCD34D';
+        ctx5.lineWidth = 4;
+        ctx5.strokeRect(440, 150, 280, 280, 20);
+        
+        ctx5.fillStyle = '#FCD34D';
+        ctx5.font = 'bold 28px -apple-system, sans-serif';
+        ctx5.textAlign = 'center';
+        ctx5.fillText('Pro 版', 580, 200);
+        ctx5.font = 'bold 42px -apple-system, sans-serif';
+        ctx5.fillText('¥29.9', 580, 250);
+        ctx5.font = '16px -apple-system, sans-serif';
+        ctx5.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx5.fillText('一次买断', 580, 275);
+        
+        ctx5.fillStyle = '#fff';
+        ctx5.font = '18px -apple-system, sans-serif';
+        ctx5.textAlign = 'left';
+        const proFeatures = ['加密保护', '无限历史', '自定义主题', '终身更新'];
+        proFeatures.forEach((f, i) => {
+            ctx5.fillText('✓ ' + f, 480, 310 + i * 35);
+        });
+        
+        // 底部强调
+        ctx5.fillStyle = '#FCD34D';
+        ctx5.font = 'bold 28px -apple-system, sans-serif';
+        ctx5.textAlign = 'center';
+        ctx5.fillText('性价比之选！', 400, 490);
+        
+        ctx5.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx5.font = '20px -apple-system, sans-serif';
+        ctx5.fillText('家庭版 ¥49.9 (3 台设备)', 400, 540);
+        ctx5.fillText('企业版 ¥99 (5 台设备)', 400, 575);
+
+        // 主图 6 - 应用场景
+        const scenarios = document.getElementById('scenarios');
+        const ctx6 = scenarios.getContext('2d');
+        
+        const gradient6 = ctx6.createLinearGradient(0, 0, 800, 800);
+        gradient6.addColorStop(0, '#4C1D95');
+        gradient6.addColorStop(1, '#7C3AED');
+        ctx6.fillStyle = gradient6;
+        ctx6.fillRect(0, 0, 800, 800);
+        
+        // 标题
+        ctx6.fillStyle = '#fff';
+        ctx6.font = 'bold 48px -apple-system, sans-serif';
+        ctx6.textAlign = 'center';
+        ctx6.fillText('🎯 谁需要它？', 400, 90);
+        
+        // 场景卡片
+        const scenariosList = [
+            { icon: '💻', role: '程序员', desc: '代码片段、API 密钥管理' },
+            { icon: '📝', role: '文字工作者', desc: '素材收集、多段组合' },
+            { icon: '🎨', role: '设计师', desc: '截图素材、颜色代码' },
+            { icon: '📊', role: '办公人士', desc: '报表数据、快速填写' }
+        ];
+        
+        scenariosList.forEach((scenario, i) => {
+            const x = 100 + (i % 2) * 320;
+            const y = 160 + Math.floor(i / 2) * 280;
+            
+            ctx6.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx6.fillRect(x, y, 300, 260, 20);
+            
+            ctx6.font = '48px sans-serif';
+            ctx6.textAlign = 'center';
+            ctx6.fillText(scenario.icon, x + 150, y + 80);
+            
+            ctx6.fillStyle = '#fff';
+            ctx6.font = 'bold 26px -apple-system, sans-serif';
+            ctx6.fillText(scenario.role, x + 150, y + 140);
+            
+            ctx6.font = '18px -apple-system, sans-serif';
+            ctx6.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx6.fillText(scenario.desc, x + 150, y + 185);
+        });
+        
+        // 底部标语
+        ctx6.fillStyle = '#C4B5FD';
+        ctx6.font = '22px -apple-system, sans-serif';
+        ctx6.textAlign = 'center';
+        ctx6.fillText('提升效率的必备工具', 400, 740);
+    </script>
+</body>
+</html>

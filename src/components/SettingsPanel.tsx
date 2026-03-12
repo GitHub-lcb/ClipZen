@@ -22,9 +22,12 @@ interface SettingsPanelProps {
   changeLocale: (locale: string) => void;
   onFeatureSettingsChange?: (enablePasswordProtection: boolean, enableMaskedCopy: boolean) => void;
   onRefresh?: () => void;
+  onActivateLicense?: () => void;
+  isPro?: boolean;
+  licenseInfo?: any;
 }
 
-export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange, onRefresh }: SettingsPanelProps) {
+export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange, onRefresh, onActivateLicense, isPro, licenseInfo }: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -218,6 +221,65 @@ export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeat
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Pro 激活状态 */}
+          <section>
+            <div 
+              className="rounded-xl p-4 border transition-colors duration-200"
+              style={{ 
+                backgroundColor: isPro ? 'var(--color-primary-light)' : 'var(--color-bg-secondary)',
+                borderColor: isPro ? 'var(--color-primary)' : 'var(--color-border)'
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="p-1.5 rounded-lg"
+                    style={{ backgroundColor: isPro ? 'var(--color-primary)' : 'var(--color-border)' }}
+                  >
+                    <svg className="w-4 h-4" style={{ color: isPro ? 'white' : 'var(--color-text-muted)' }} fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                      {isPro ? 'ClipZen Pro' : '升级到 Pro'}
+                    </h3>
+                    {isPro && licenseInfo && (
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        {licenseInfo.license_type === 'Standard' ? '标准版' : licenseInfo.license_type === 'Family' ? '家庭版' : '企业版'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!isPro && (
+                  <button
+                    onClick={onActivateLicense}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
+                    style={{
+                      backgroundColor: 'var(--color-primary)',
+                      color: 'white'
+                    }}
+                  >
+                    激活
+                  </button>
+                )}
+              </div>
+              {!isPro && (
+                <ul className="text-xs space-y-1" style={{ color: 'var(--color-text-muted)' }}>
+                  <li>✓ 加密存储保护</li>
+                  <li>✓ 无限历史记录</li>
+                  <li>✓ 自定义主题</li>
+                  <li>✓ 终身免费更新</li>
+                </ul>
+              )}
+              {isPro && (
+                <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
+                  感谢您的支持！您已激活 Pro 版本。
+                </p>
+              )}
+            </div>
+          </section>
+
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Globe className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />

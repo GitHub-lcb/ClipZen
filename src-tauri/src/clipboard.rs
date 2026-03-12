@@ -76,13 +76,14 @@ impl ClipboardManager {
                 // 转换为 PNG 格式
                 use image::codecs::png::PngEncoder;
                 use image::ImageEncoder;
+                use image::ColorType;
                 let mut png_data = Vec::new();
                 let encoder = PngEncoder::new(&mut png_data);
                 let _ = encoder.write_image(
                     &image.bytes,
                     image.width as u32,
                     image.height as u32,
-                    image::ExtendedColorType::Rgba8,
+                    ColorType::Rgba8,
                 );
                 return ClipboardContent::Image(png_data);
             }

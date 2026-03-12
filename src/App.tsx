@@ -7,6 +7,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { TagManager } from "./components/TagManager";
 import { ItemDetail } from "./components/ItemDetail";
 import { PasswordDialog } from "./components/PasswordDialog";
+import { LicenseDialog } from "./components/LicenseDialog";
 
 const SENSITIVE_PATTERNS = [
   { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
@@ -85,6 +86,9 @@ function App() {
   const [sortBy, setSortBy] = useState<"time" | "type" | "content" | "popularity">("time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
   const { items, loading, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -104,7 +108,22 @@ function App() {
         console.error("Failed to load feature settings:", error);
       }
     };
+    
+    const loadLicenseInfo = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const info = await invoke<any>("get_license_info");
+        if (info) {
+          setIsPro(true);
+          setLicenseInfo(info);
+        }
+      } catch (error) {
+        console.error("Failed to load license info:", error);
+      }
+    };
+    
     loadFeatureSettings();
+    loadLicenseInfo();
   }, []);
 
   const allTags = useMemo(() => {
@@ -459,6 +478,9 @@ function App() {
           setEnableMaskedCopy(maskedCopy);
         }}
         onRefresh={refresh}
+        onActivateLicense={() => setLicenseDialogOpen(true)}
+        isPro={isPro}
+        licenseInfo={licenseInfo}
       />
       {detailItem && <ItemDetail item={detailItem} onClose={() => { setDetailItem(null); setUnlockedItems(new Set()); }} onUpdate={refresh} t={t} enablePasswordProtection={enablePasswordProtection} enableMaskedCopy={enableMaskedCopy} />}
       <PasswordDialog
@@ -826,6 +848,15 @@ function App() {
       >
         {t('status.total', { n: items.length })} | {t('status.showing', { n: filteredItems.length })}
       </div>
+      
+      <LicenseDialog
+        isOpen={licenseDialogOpen}
+        onClose={() => setLicenseDialogOpen(false)}
+        onActivated={() => {
+          setIsPro(true);
+          refresh();
+        }}
+      />
     </div>
   );
 }

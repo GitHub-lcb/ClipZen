@@ -3,6 +3,7 @@
 use crate::clipboard::{ClipboardManager, ClipboardContent};
 use crate::storage::Storage;
 use crate::settings::{SettingsManager, AppSettings, hash_password, verify_password_hash};
+use crate::license::{LicenseManager, LicenseInfo, LicenseType, ActivationResult};
 use tauri::State;
 use std::sync::{Arc, Mutex};
 use std::fs;
@@ -453,4 +454,70 @@ pub fn has_global_password(
 pub fn get_image_data(file_path: String) -> Result<String, String> {
     let data = fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
     Ok(format!("data:image/png;base64,{}", crate::storage::base64_encode(&data)))
+}
+
+// ============ 许可证/激活相关命令 ============
+
+/// 激活许可证
+#[tauri::command]
+pub fn activate_license(
+    code: String,
+    license_manager: State<Arc<Mutex<LicenseManager>>>,
+) -> Result<ActivationResult, String> {
+    use crate::license::{generate_machine_id, verify_license_code};
+    
+    let machine_id = generate_machine_id();
+    let result = verify_license_code(&code, &machine_id);
+    
+    if result.success {
+        if let Some(ref info) = result.license_info {
+            let mut manager = license_manager.lock().unwrap();
+            if let Err(e) = manager.save(info) {
+                return Ok(ActivationResult {
+                    success: false,
+                    message: format!("保存许可证失败：{}", e),
+                    license_info: None,
+                });
+            }
+        }
+    }
+    
+    Ok(result)
+}
+
+/// 获取当前许可证信息
+#[tauri::command]
+pub fn get_license_info(
+    license_manager: State<Arc<Mutex<LicenseManager>>>,
+) -> Result<Option<LicenseInfo>, String> {
+    let mut manager = license_manager.lock().unwrap();
+    Ok(manager.load().cloned())
+}
+
+/// 反激活许可证
+#[tauri::command]
+pub fn deactivate_license(
+    license_manager: State<Arc<Mutex<LicenseManager>>>,
+) -> Result<(), String> {
+    let mut manager = license_manager.lock().unwrap();
+    manager.remove().map_err(|e| format!("反激活失败：{}", e))
+}
+
+/// 生成许可证码（仅用于管理员/批量生成工具）
+#[tauri::command]
+pub fn generate_license_codes(
+    count: u32,
+    license_type: String,
+    device_slots: u32,
+) -> Result<Vec<String>, String> {
+    use crate::license::generate_batch_license_codes;
+    
+    let ltype = match license_type.as_str() {
+        "standard" => LicenseType::Standard,
+        "family" => LicenseType::Family,
+        "enterprise" => LicenseType::Enterprise,
+        _ => LicenseType::Standard,
+    };
+    
+    Ok(generate_batch_license_codes(count as usize, ltype, device_slots))
 }
