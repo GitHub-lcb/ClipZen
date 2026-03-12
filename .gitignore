@@ -28,3 +28,18 @@ dist-ssr
 src-tauri/target
 src-tauri/clipzen.db
 src-tauri/gen/schemas/*-schema.json
+
+# License keys (不要提交激活码)
+scripts/licenses_*.csv
+
+# Build outputs
+*.AppImage
+*.deb
+*.rpm
+*.dmg
+*.msi
+*.exe
+
+# Secrets
+.env
+.env.local

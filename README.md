@@ -149,12 +149,12 @@ ClipZen 提供免费版和 Pro 版本：
 | 终身更新 | ✗ | ✓ |
 | 价格 | 免费 | ¥29.9 |
 
-**购买方式：** [淘宝店铺](待添加)
+**购买方式：** [淘宝店铺](https://shopXXX.taobao.com) <!-- 上架后更新 -->
 
 ---
 
-**官网：** [clipzen.app](https://clipzen.app) (待上线)
+**官网：** [clipzen.app](https://clipzen.app) (规划中)
 
 **反馈：** [提交 Issue](https://github.com/lcb/ClipZen/issues)
 
-**社群：** [QQ 群](待添加)
+**社群：** [QQ 群](待创建) <!-- 上架后创建 -->

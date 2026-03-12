@@ -155,7 +155,7 @@ impl Storage {
                 &Utc::now().timestamp_millis().to_string(),
                 file_path,
                 "[]",
-                &content_hash.to_string(),
+                content_hash,
             ],
         )?;
         Ok(id)
