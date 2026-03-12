@@ -1,11 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Sha256, Digest};
 use hmac::{Hmac, Mac};
-use base32;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::fs;
 use std::path::PathBuf;
-use dirs;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -36,14 +34,6 @@ pub struct ActivationResult {
     pub success: bool,
     pub message: String,
     pub license_info: Option<LicenseInfo>,
-}
-
-/// 机器信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MachineInfo {
-    pub cpu_id: String,
-    pub motherboard_serial: String,
-    pub disk_serial: String,
 }
 
 /// 生成机器码（硬件指纹）
@@ -385,20 +375,6 @@ impl LicenseManager {
         Ok(())
     }
     
-    /// 检查是否已激活
-    pub fn is_activated(&mut self) -> bool {
-        self.load().is_some()
-    }
-    
-    /// 获取许可证类型
-    pub fn get_license_type(&mut self) -> Option<LicenseType> {
-        self.load().map(|info| info.license_type.clone())
-    }
-    
-    /// 检查是否为专业版（任何付费版本）
-    pub fn is_pro(&mut self) -> bool {
-        self.load().is_some()
-    }
 }
 
 impl Default for LicenseManager {

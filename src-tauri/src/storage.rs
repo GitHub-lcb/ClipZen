@@ -147,14 +147,14 @@ impl Storage {
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             [
                 &id,
-                &"image".to_string(),
+                "image",
                 &base64_encode(image_data),
                 preview_base64,
                 &0.to_string(),
                 &0.to_string(),
                 &Utc::now().timestamp_millis().to_string(),
-                &file_path.to_string(),
-                &"[]".to_string(),
+                file_path,
+                "[]",
                 &content_hash.to_string(),
             ],
         )?;
