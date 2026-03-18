@@ -1,13 +1,28 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown } from "lucide-react";
-import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
-import { useI18n } from "./hooks/useI18n";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { TagManager } from "./components/TagManager";
-import { ItemDetail } from "./components/ItemDetail";
-import { PasswordDialog } from "./components/PasswordDialog";
-import { LicenseDialog } from "./components/LicenseDialog";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, 
+  Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown 
+} from "lucide-react";
+import { useClipboard, ClipboardItem } from "@/hooks/useClipboard";
+import { useI18n } from "@/hooks/useI18n";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { TagManager } from "@/components/TagManager";
+import { ItemDetail } from "@/components/ItemDetail";
+import { PasswordDialog } from "@/components/PasswordDialog";
+import { LicenseDialog } from "@/components/LicenseDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipTrigger,
+  TooltipProvider 
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 const SENSITIVE_PATTERNS = [
   { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
@@ -66,6 +81,22 @@ function hasSensitiveInfo(content: string): boolean {
   return detectSensitive(content).length > 0;
 }
 
+// 动画配置
+const fadeInUp = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -10 },
+  transition: { duration: 0.2 }
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.03
+    }
+  }
+};
+
 function App() {
   const { t, locale, changeLocale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,8 +126,8 @@ function App() {
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(50);
-  const ITEM_HEIGHT = 120; // 估算每个 item 的高度
-  const MAX_VISIBLE_ITEMS = 50; // 虚拟滚动最大显示数量
+  const ITEM_HEIGHT = 120;
+  const MAX_VISIBLE_ITEMS = 50;
 
   useEffect(() => {
     const loadFeatureSettings = async () => {
@@ -153,9 +184,7 @@ function App() {
       );
     }
     
-    // 排序逻辑 - 优化：最近复制的排在最前面
     const sorted = [...result].sort((a, b) => {
-      // 置顶始终在前
       if (a.pinned !== b.pinned) {
         return a.pinned ? -1 : 1;
       }
@@ -175,10 +204,9 @@ function App() {
           const bContent = b.item_type === "image" ? "" : (b.preview || b.content).toLowerCase();
           return aContent.localeCompare(bContent, "zh-CN") * multiplier;
         case "popularity":
-          // 优化：优先按最近复制时间排序，其次按复制次数
           const aLastCopy = a.updated_at || a.created_at;
           const bLastCopy = b.updated_at || b.created_at;
-          const copyTimeDiff = bLastCopy - aLastCopy; // 最近复制的在前
+          const copyTimeDiff = bLastCopy - aLastCopy;
           if (copyTimeDiff !== 0) return copyTimeDiff;
           const aCount = a.copy_count || 0;
           const bCount = b.copy_count || 0;
@@ -218,7 +246,6 @@ function App() {
     scrollToSelectedItem();
   }, [selectedIndex, scrollToSelectedItem]);
 
-  // 虚拟滚动 - 优化大数据量性能
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -232,7 +259,6 @@ function App() {
       Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 10
     );
     
-    // 限制最大显示数量
     const visibleCount = newEndIndex - newStartIndex;
     if (visibleCount > MAX_VISIBLE_ITEMS) {
       const adjustedStart = newStartIndex + Math.floor((visibleCount - MAX_VISIBLE_ITEMS) / 2);
@@ -249,14 +275,13 @@ function App() {
     if (!container) return;
 
     container.addEventListener('scroll', handleScroll);
-    handleScroll(); // 初始化
+    handleScroll();
     
     return () => {
       container.removeEventListener('scroll', handleScroll);
     };
   }, [handleScroll]);
 
-  // 重置虚拟滚动索引当数据变化时
   useEffect(() => {
     setStartIndex(0);
     setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
@@ -279,16 +304,14 @@ function App() {
         setSelectedIndex(prev => Math.max(prev - 1, 0));
         return;
       }
-      // Home 键：跳转到第一个
       if (e.key === 'Home') {
         e.preventDefault();
-        setSelectedIndex(pinnedItems.length); // 跳到最近列表第一个
+        setSelectedIndex(pinnedItems.length);
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
         return;
       }
-      // End 键：跳转到最后一个
       if (e.key === 'End') {
         e.preventDefault();
         setSelectedIndex(allFilteredItems.length - 1);
@@ -421,591 +444,582 @@ function App() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-        <div className="relative">
-          <Loader2 className="w-10 h-10 animate-spin" style={{ color: 'var(--color-primary)' }} />
-          <div className="absolute inset-0 w-10 h-10 animate-ping opacity-20" style={{ color: 'var(--color-primary)' }}>
-            <Loader2 />
+      <div className="flex flex-col items-center justify-center h-screen bg-background">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="relative"
+        >
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <div className="absolute inset-0 w-10 h-10 animate-ping opacity-20">
+            <Loader2 className="text-primary" />
           </div>
-        </div>
-        <div className="mt-4 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+        </motion.div>
+        <motion.p 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="mt-4 text-sm text-muted-foreground"
+        >
           {t('recent.empty') === '暂无记录' ? '加载中...' : 'Loading...'}
-        </div>
+        </motion.p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
-      {previewImage && (
-        <div 
-          className="fixed inset-0 flex items-center justify-center z-50 animate-fade-in"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.75)' }}
-          onClick={() => setPreviewImage(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh] p-4 animate-scale-in">
-            <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
-            <button 
-              className="absolute top-6 right-6 p-2 rounded-lg transition-all duration-200 hover:scale-110"
-              style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white' }}
+    <TooltipProvider>
+      <div className="flex flex-col h-screen bg-background">
+        {/* 图片预览模态框 */}
+        <AnimatePresence>
+          {previewImage && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 flex items-center justify-center z-50 bg-black/75"
               onClick={() => setPreviewImage(null)}
             >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div 
-        className="flex items-center gap-3 px-4 py-3 border-b transition-colors duration-200"
-        style={{ 
-          borderColor: 'var(--color-border)',
-          backgroundColor: 'var(--color-bg-card)'
-        }}
-      >
-        <div className="relative flex-1">
-          <Search 
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors duration-200"
-            style={{ color: 'var(--color-text-muted)' }}
-          />
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder={`${t('search.placeholder')} (${t('search.shortcut')})`}
-            className="w-full pl-10 pr-4 py-2 rounded-lg border outline-none transition-all duration-200"
-            style={{ 
-              backgroundColor: 'var(--color-bg)',
-              borderColor: 'var(--color-border)',
-              color: 'var(--color-text)'
-            }}
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(-1); }}
-          />
-        </div>
-        <div className="flex items-center gap-1 relative">
-          <button 
-            onClick={() => setShowSortMenu(!showSortMenu)} 
-            className={`btn-icon ${showSortMenu ? 'bg-primary-light' : ''}`}
-            title={t('sort.title')}
-            style={showSortMenu ? { backgroundColor: 'var(--color-primary-light)' } : {}}
-          >
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-          {showSortMenu && (
-            <div 
-              className="absolute right-0 top-full mt-1 w-40 rounded-lg shadow-lg border z-50"
-              style={{ 
-                backgroundColor: 'var(--color-bg-card)',
-                borderColor: 'var(--color-border)'
-              }}
-            >
-              <div className="p-1">
-                {[
-                  { key: "time", label: t('sort.time') },
-                  { key: "type", label: t('sort.type') },
-                  { key: "content", label: t('sort.content') },
-                  { key: "popularity", label: t('sort.popularity') },
-                ].map(option => (
-                  <button
-                    key={option.key}
-                    onClick={() => {
-                      if (sortBy === option.key) {
-                        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                      } else {
-                        setSortBy(option.key as "time" | "type" | "content" | "popularity");
-                        setSortOrder("desc");
-                      }
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm transition-colors"
-                    style={{ 
-                      color: sortBy === option.key ? 'var(--color-primary)' : 'var(--color-text)',
-                      backgroundColor: sortBy === option.key ? 'var(--color-primary-light)' : 'transparent'
-                    }}
-                  >
-                    <span>{option.label}</span>
-                    {sortBy === option.key && (
-                      sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative max-w-4xl max-h-[90vh] p-4"
+              >
+                <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
+                <Button 
+                  variant="secondary"
+                  size="icon"
+                  className="absolute top-6 right-6"
+                  onClick={() => setPreviewImage(null)}
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </motion.div>
+            </motion.div>
           )}
-          <button 
-            onClick={() => setSettingsOpen(true)} 
-            className="btn-icon"
-            title={t('settings.title')}
-          >
-            <SettingsIcon className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+        </AnimatePresence>
 
-      <SettingsPanel 
-        isOpen={settingsOpen} 
-        onClose={() => setSettingsOpen(false)} 
-        t={t} 
-        locale={locale} 
-        changeLocale={changeLocale}
-        onFeatureSettingsChange={(passwordProtection, maskedCopy) => {
-          setEnablePasswordProtection(passwordProtection);
-          setEnableMaskedCopy(maskedCopy);
-        }}
-        onRefresh={refresh}
-        onActivateLicense={() => setLicenseDialogOpen(true)}
-        isPro={isPro}
-        licenseInfo={licenseInfo}
-      />
-      {detailItem && <ItemDetail item={detailItem} onClose={() => { setDetailItem(null); setUnlockedItems(new Set()); }} onUpdate={refresh} t={t} enablePasswordProtection={enablePasswordProtection} enableMaskedCopy={enableMaskedCopy} />}
-      <PasswordDialog
-        isOpen={passwordDialogOpen}
-        mode={passwordDialogMode}
-        onConfirm={handlePasswordConfirm}
-        onCancel={handlePasswordCancel}
-        error={passwordDialogError}
-        t={t}
-      />
-
-      {pinnedItems.length > 0 && (
-        <div 
-          className="p-4 border-b transition-colors duration-200"
-          style={{ borderColor: 'var(--color-border)' }}
+        {/* 头部搜索栏 - 毛玻璃效果 */}
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="glass flex items-center gap-3 px-4 py-3 border-b sticky top-0 z-10"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div 
-                className="p-1.5 rounded-lg"
-                style={{ backgroundColor: 'var(--color-primary-light)' }}
-              >
-                <Pin className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              </div>
-              <span 
-                className="text-sm font-medium"
-                style={{ color: 'var(--color-text)' }}
-              >
-                {t('pinned.title')}
-              </span>
-            </div>
-            <div 
-              className="h-px flex-1 ml-3"
-              style={{ 
-                background: `linear-gradient(to right, var(--color-border), transparent)`
-              }} 
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder={`${t('search.placeholder')} (${t('search.shortcut')})`}
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(-1); }}
             />
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            {pinnedItems.map((item, idx) => {
-              const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
-              return (
-                <div
-                  key={item.id}
-                  ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                  onClick={() => {
-                    if (enablePasswordProtection && item.protected) {
-                      handleProtectedItemClick(item);
-                    } else {
-                      handleCopyWithFeedback(item);
-                    }
-                  }}
-                  className={`
-                    group relative rounded-xl cursor-pointer overflow-hidden 
-                    transition-all duration-200 ease-out
-                    ${selectedIndex === idx 
-                      ? 'ring-2 ring-offset-2 scale-[1.02]' 
-                      : 'hover:scale-[1.02]'
-                    }
-                  `}
-                  style={{ 
-                    backgroundColor: item.item_type === "image" ? 'var(--color-bg-card)' : 'var(--color-primary-light)',
-                    borderColor: 'var(--color-border)',
-                    borderWidth: '1px',
-                    boxShadow: selectedIndex === idx ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-                    ['--tw-ring-offset-color' as string]: 'var(--color-bg)'
-                  } as React.CSSProperties}
+          <div className="flex items-center gap-1 relative">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  className={cn(showSortMenu && "bg-accent")}
                 >
-                  {copiedId === item.id && (
-                    <div 
-                      className="absolute inset-0 flex items-center justify-center rounded-xl animate-scale-in"
-                      style={{ 
-                        backgroundColor: 'var(--color-success)',
-                        backdropFilter: 'blur(4px)'
-                      }}
-                    >
-                      <div className="flex flex-col items-center gap-1.5">
-                        <Check className="w-7 h-7 text-white" />
-                        <span className="text-xs font-medium text-white">{t('actions.copied')}</span>
-                      </div>
-                    </div>
-                  )}
-                  {item.item_type === "image" ? (
-                    <div className="relative w-full h-full">
-                      <img 
-                        src={item.preview} 
-                        alt="Image" 
-                        className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300" 
-                      />
-                      <div 
-                        className="absolute inset-0 flex items-end justify-center pb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                        style={{ 
-                          background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)'
+                  <ArrowUpDown className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('sort.title')}</TooltipContent>
+            </Tooltip>
+            
+            <AnimatePresence>
+              {showSortMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 top-full mt-1 w-40 rounded-lg shadow-lg border bg-popover z-50"
+                >
+                  <div className="p-1">
+                    {[
+                      { key: "time", label: t('sort.time') },
+                      { key: "type", label: t('sort.type') },
+                      { key: "content", label: t('sort.content') },
+                      { key: "popularity", label: t('sort.popularity') },
+                    ].map(option => (
+                      <Button
+                        key={option.key}
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          "w-full justify-between",
+                          sortBy === option.key && "bg-accent text-primary"
+                        )}
+                        onClick={() => {
+                          if (sortBy === option.key) {
+                            setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                          } else {
+                            setSortBy(option.key as "time" | "type" | "content" | "popularity");
+                            setSortOrder("desc");
+                          }
                         }}
                       >
-                        <span className="text-xs text-white font-medium">{t('image.clickToCopy')}</span>
-                      </div>
-                    </div>
-                  ) : item.item_type === "files" ? (
-                    <div 
-                      className="flex flex-col items-center justify-center w-full h-full p-3" 
-                      title={item.preview}
-                    >
-                      <FolderOpen className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
-                      <span 
-                        className="text-xs mt-1 truncate px-1 text-center"
-                        style={{ color: 'var(--color-text-secondary)' }}
-                      >
-                        {item.preview}
-                      </span>
-                    </div>
-                  ) : (
-                    <div 
-                      className="flex items-center justify-center w-full h-full p-3" 
-                      title={isProtected ? "受保护的内容" : item.content}
-                    >
-                      <div className="flex flex-col items-center gap-1">
-                        {isProtected && (
-                          <Lock className="w-3.5 h-3.5" style={{ color: 'var(--color-warning)' }} />
+                        <span>{option.label}</span>
+                        {sortBy === option.key && (
+                          sortOrder === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
                         )}
-                        <span 
-                          className="text-xs font-medium truncate px-2.5 text-center leading-relaxed max-w-full"
-                          style={{ color: 'var(--color-text)' }}
-                        >
-                          {isProtected ? "****" : item.preview}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); togglePin(item.id); }} 
-                    className="absolute top-2 right-2 p-1.5 rounded-lg transition-all duration-200 hover:scale-110 z-10"
-                    style={{ 
-                      backgroundColor: 'var(--color-bg-card)',
-                      boxShadow: 'var(--shadow-sm)'
-                    }}
-                  >
-                    <Pin 
-                      className="w-3.5 h-3.5" 
-                      style={{ 
-                        color: item.pinned ? 'var(--color-primary)' : 'var(--color-text-muted)'
-                      }} 
-                    />
-                  </button>
+                      </Button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
+                  <SettingsIcon className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('settings.title')}</TooltipContent>
+            </Tooltip>
+          </div>
+        </motion.div>
+
+        <SettingsPanel 
+          isOpen={settingsOpen} 
+          onClose={() => setSettingsOpen(false)} 
+          t={t} 
+          locale={locale} 
+          changeLocale={changeLocale}
+          onFeatureSettingsChange={(passwordProtection, maskedCopy) => {
+            setEnablePasswordProtection(passwordProtection);
+            setEnableMaskedCopy(maskedCopy);
+          }}
+          onRefresh={refresh}
+          onActivateLicense={() => setLicenseDialogOpen(true)}
+          isPro={isPro}
+          licenseInfo={licenseInfo}
+        />
+        
+        {detailItem && <ItemDetail item={detailItem} onClose={() => { setDetailItem(null); setUnlockedItems(new Set()); }} onUpdate={refresh} t={t} enablePasswordProtection={enablePasswordProtection} enableMaskedCopy={enableMaskedCopy} />}
+        
+        <PasswordDialog
+          isOpen={passwordDialogOpen}
+          mode={passwordDialogMode}
+          onConfirm={handlePasswordConfirm}
+          onCancel={handlePasswordCancel}
+          error={passwordDialogError}
+          t={t}
+        />
+
+        {/* 置顶区域 */}
+        <AnimatePresence>
+          {pinnedItems.length > 0 && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="p-4 border-b"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10">
+                    <Pin className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <span className="text-sm font-medium">{t('pinned.title')}</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <TagFilter allTags={allTags} selectedTag={selectedTag} onSelectTag={setSelectedTag} t={t} />
-
-      <div 
-        ref={scrollContainerRef} 
-        className="flex-1 overflow-y-auto p-4"
-      >
-        <div 
-          className="flex items-center justify-between mb-3"
-        >
-          <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            <Clipboard className="w-3.5 h-3.5" />
-            <span>{t('recent.title')}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => {
-                if (scrollContainerRef.current) {
-                  scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-                  setSelectedIndex(pinnedItems.length);
-                }
-              }}
-              className="btn-icon"
-              title={t('keyboard.top') || '回到顶部'}
-            >
-              <ChevronUp className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => {
-                if (scrollContainerRef.current) {
-                  scrollContainerRef.current.scrollTo({ 
-                    top: scrollContainerRef.current.scrollHeight, 
-                    behavior: 'smooth' 
-                  });
-                  setSelectedIndex(allFilteredItems.length - 1);
-                }
-              }}
-              className="btn-icon"
-              title={t('keyboard.bottom') || '回到底部'}
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              {t('keyboard.navigate')} {t('keyboard.copy')} {t('keyboard.delete')}
-            </span>
-          </div>
-        </div>
-        {recentItems.length === 0 ? (
-          <div className="text-center py-16 animate-fade-in">
-            <div 
-              className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: 'var(--color-border)' }}
-            >
-              <Clipboard className="w-8 h-8" style={{ color: 'var(--color-text-muted)' }} />
-            </div>
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{t('recent.empty')}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{t('recent.emptyHint')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {/* 虚拟滚动：顶部占位 */}
-            {startIndex > 0 && (
-              <div style={{ height: startIndex * ITEM_HEIGHT }} />
-            )}
-            {/* 渲染可见范围内的项目 */}
-            {recentItems.slice(startIndex, endIndex).map((item, idx) => {
-              const actualIdx = startIndex + idx;
-              const globalIdx = pinnedItems.length + actualIdx;
-              const isSelected = selectedIndex === globalIdx;
-              const showDeleteConfirm = deleteConfirmId === item.id;
-              const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
-              const showMaskedCopy = enableMaskedCopy && !isProtected && item.item_type === "text" && hasSensitiveInfo(item.content);
-              
-              return (
-                <div
-                  key={item.id}
-                  ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
-                  onClick={() => {
-                    if (enablePasswordProtection && item.protected) {
-                      handleProtectedItemClick(item);
-                    } else {
-                      handleCopyWithFeedback(item);
-                    }
-                  }}
-                  className={`
-                    p-4 rounded-xl cursor-pointer transition-all duration-200
-                    ${isSelected 
-                      ? 'ring-2 ring-offset-2 scale-[1.01]' 
-                      : 'hover:shadow-md'
-                    }
-                  `}
-                  style={{ 
-                    backgroundColor: 'var(--color-bg-card)',
-                    borderColor: 'var(--color-border)',
-                    borderWidth: '1px',
-                    boxShadow: isSelected ? 'var(--shadow-md)' : 'var(--shadow-sm)',
-                    ['--tw-ring-offset-color' as string]: 'var(--color-bg)'
-                  } as React.CSSProperties}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      {item.item_type === "image" ? (
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden"
-                            style={{ 
-                              borderColor: 'var(--color-border)',
-                              borderWidth: '1px'
-                            }}
+                <div className="h-px flex-1 ml-3 bg-gradient-to-r from-border to-transparent" />
+              </div>
+              <motion.div 
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+                className="grid grid-cols-4 gap-3"
+              >
+                {pinnedItems.map((item, idx) => {
+                  const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
+                  return (
+                    <motion.div
+                      key={item.id}
+                      variants={fadeInUp}
+                      ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                      onClick={() => {
+                        if (enablePasswordProtection && item.protected) {
+                          handleProtectedItemClick(item);
+                        } else {
+                          handleCopyWithFeedback(item);
+                        }
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "group relative rounded-xl cursor-pointer overflow-hidden border transition-all duration-200",
+                        selectedIndex === idx ? "ring-2 ring-primary ring-offset-2" : "hover:border-primary/50"
+                      )}
+                    >
+                      <AnimatePresence>
+                        {copiedId === item.id && (
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 flex items-center justify-center rounded-xl bg-green-500"
                           >
-                            <img 
-                              src={item.preview} 
-                              alt="Image" 
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                            <Clock className="w-3 h-3" />
-                            <span>{formatTime(item.created_at)}</span>
-                          </div>
+                            <div className="flex flex-col items-center gap-1.5">
+                              <Check className="w-7 h-7 text-white" />
+                              <span className="text-xs font-medium text-white">{t('actions.copied')}</span>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      
+                      {item.item_type === "image" ? (
+                        <div className="relative w-full h-full min-h-[80px]">
+                          <img 
+                            src={item.preview} 
+                            alt="Image" 
+                            className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300" 
+                          />
                         </div>
                       ) : item.item_type === "files" ? (
-                        <div className="flex items-start gap-2">
-                          <FolderOpen className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-primary)' }} />
-                          <div>
-                            <p className="text-sm line-clamp-2" style={{ color: 'var(--color-text)' }}>{item.preview}</p>
-                            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{item.content.split('\n').length} 个文件</p>
+                        <div className="flex flex-col items-center justify-center w-full h-full p-3 min-h-[80px]">
+                          <FolderOpen className="w-6 h-6 text-primary" />
+                          <span className="text-xs mt-1 truncate px-1 text-center text-muted-foreground">
+                            {item.preview}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center w-full h-full p-3 min-h-[80px] bg-primary/5">
+                          <div className="flex flex-col items-center gap-1">
+                            {isProtected && <Lock className="w-3.5 h-3.5 text-amber-500" />}
+                            <span className="text-xs font-medium truncate px-2.5 text-center leading-relaxed max-w-full">
+                              {isProtected ? "****" : item.preview}
+                            </span>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex items-start gap-2">
-                          {isProtected && (
-                            <Lock className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                          )}
-                          <p className="text-sm line-clamp-3" style={{ color: 'var(--color-text)' }}>{getDisplayContent(item)}</p>
-                        </div>
                       )}
-                      {item.item_type !== "image" && (
-                        <div className="flex items-center gap-1 mt-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                          <Clock className="w-3 h-3" />
-                          <span>{formatTime(item.created_at)}</span>
-                        </div>
-                      )}
-                      <div className="mt-3">
-                        <TagManager itemId={item.id} currentTags={item.tags || []} onTagsChange={() => refresh()} t={t} />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {copiedId === item.id && (
-                        <span 
-                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg animate-scale-in"
-                          style={{ 
-                            backgroundColor: 'var(--color-success-light)',
-                            color: 'var(--color-success)'
-                          }}
-                        >
-                          <Check className="w-3 h-3" />
-                          {t('actions.copied')}
-                        </span>
-                      )}
-                      {item.item_type === "image" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}
-                          className="btn-icon"
-                          title={t('image.preview')}
-                        >
-                          <ImageIcon className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}
-                        className="btn-icon"
-                        title={t('actions.copy')}
+                      
+                      <Button 
+                        variant="secondary"
+                        size="icon"
+                        className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
                       >
-                        <Clipboard className="w-4 h-4" />
-                      </button>
-                      {showMaskedCopy && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleMaskedCopy(item); }} 
-                          className="btn-icon"
-                          style={{ 
-                            backgroundColor: 'var(--color-warning-light)'
-                          }}
-                          title={t('detail.maskedCopy')}
-                        >
-                          <Shield className="w-4 h-4" style={{ color: 'var(--color-warning)' }} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setDetailItem(item); }} 
-                        className="btn-icon" 
-                        title={t('detail.title')}
-                      >
-                        <Info className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); togglePin(item.id); }} 
-                        className="btn-icon"
-                        style={{ 
-                          backgroundColor: item.pinned ? 'var(--color-primary-light)' : undefined,
-                          color: item.pinned ? 'var(--color-primary)' : undefined
-                        }}
-                        title={t('actions.pin')}
-                      >
-                        <Pin className="w-4 h-4" />
-                      </button>
-                      {showDeleteConfirm ? (
-                        <div className="flex items-center gap-1">
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteConfirm(item.id); }} 
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors hover:opacity-90"
-                            style={{ 
-                              backgroundColor: 'var(--color-error)',
-                              color: 'white'
-                            }}
-                          >
-                            {t('actions.confirm')}
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} 
-                            className="btn-secondary text-xs px-3 py-1.5"
-                          >
-                            {t('actions.cancel')}
-                          </button>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }} 
-                          className="btn-icon"
-                          title={t('actions.delete')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {/* 虚拟滚动：底部占位 */}
-            {endIndex < recentItems.length && (
-              <div style={{ height: (recentItems.length - endIndex) * ITEM_HEIGHT }} />
-            )}
-          </div>
-        )}
-      </div>
+                        <Pin className={cn("w-3 h-3", item.pinned && "text-primary")} />
+                      </Button>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      <div 
-        className="px-4 py-2 text-xs text-center border-t transition-colors duration-200"
-        style={{ 
-          borderColor: 'var(--color-border)',
-          color: 'var(--color-text-muted)'
-        }}
-      >
-        {t('status.total', { n: items.length })} | {t('status.showing', { n: filteredItems.length })}
+        {/* 标签过滤器 */}
+        <TagFilter allTags={allTags} selectedTag={selectedTag} onSelectTag={setSelectedTag} t={t} />
+
+        {/* 主内容区域 */}
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clipboard className="w-3.5 h-3.5" />
+              <span>{t('recent.title')}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                        setSelectedIndex(pinnedItems.length);
+                      }
+                    }}
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('keyboard.top')}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollTo({ 
+                          top: scrollContainerRef.current.scrollHeight, 
+                          behavior: 'smooth' 
+                        });
+                        setSelectedIndex(allFilteredItems.length - 1);
+                      }
+                    }}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('keyboard.bottom')}</TooltipContent>
+              </Tooltip>
+              <span className="text-xs text-muted-foreground">
+                {t('keyboard.navigate')} {t('keyboard.copy')} {t('keyboard.delete')}
+              </span>
+            </div>
+          </div>
+          
+          {recentItems.length === 0 ? (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-center py-16"
+            >
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
+                <Clipboard className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <p className="text-sm text-muted-foreground">{t('recent.empty')}</p>
+              <p className="text-xs mt-1 text-muted-foreground/60">{t('recent.emptyHint')}</p>
+            </motion.div>
+          ) : (
+            <motion.div 
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+              className="space-y-3"
+            >
+              {startIndex > 0 && <div style={{ height: startIndex * ITEM_HEIGHT }} />}
+              
+              {recentItems.slice(startIndex, endIndex).map((item, idx) => {
+                const actualIdx = startIndex + idx;
+                const globalIdx = pinnedItems.length + actualIdx;
+                const isSelected = selectedIndex === globalIdx;
+                const showDeleteConfirm = deleteConfirmId === item.id;
+                const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
+                const showMaskedCopy = enableMaskedCopy && !isProtected && item.item_type === "text" && hasSensitiveInfo(item.content);
+                
+                return (
+                  <motion.div
+                    key={item.id}
+                    variants={fadeInUp}
+                    ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                    onClick={() => {
+                      if (enablePasswordProtection && item.protected) {
+                        handleProtectedItemClick(item);
+                      } else {
+                        handleCopyWithFeedback(item);
+                      }
+                    }}
+                    whileHover={{ scale: 1.005 }}
+                    whileTap={{ scale: 0.995 }}
+                  >
+                    <Card className={cn(
+                      "p-4 cursor-pointer transition-all duration-200",
+                      isSelected && "ring-2 ring-primary ring-offset-2"
+                    )}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {item.item_type === "image" ? (
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border">
+                                <img src={item.preview} alt="Image" className="w-full h-full object-cover" />
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                <span>{formatTime(item.created_at)}</span>
+                              </div>
+                            </div>
+                          ) : item.item_type === "files" ? (
+                            <div className="flex items-start gap-2">
+                              <FolderOpen className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
+                              <div>
+                                <p className="text-sm line-clamp-2">{item.preview}</p>
+                                <p className="text-xs mt-1 text-muted-foreground">{item.content.split('\n').length} 个文件</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start gap-2">
+                              {isProtected && <Lock className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />}
+                              <p className="text-sm line-clamp-3">{getDisplayContent(item)}</p>
+                            </div>
+                          )}
+                          {item.item_type !== "image" && (
+                            <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              <span>{formatTime(item.created_at)}</span>
+                            </div>
+                          )}
+                          <div className="mt-3">
+                            <TagManager itemId={item.id} currentTags={item.tags || []} onTagsChange={() => refresh()} t={t} />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <AnimatePresence>
+                            {copiedId === item.id && (
+                              <motion.span 
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-green-500/10 text-green-600"
+                              >
+                                <Check className="w-3 h-3" />
+                                {t('actions.copied')}
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                          
+                          {item.item_type === "image" && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}>
+                                  <ImageIcon className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('image.preview')}</TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}>
+                                <Clipboard className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('actions.copy')}</TooltipContent>
+                          </Tooltip>
+                          
+                          {showMaskedCopy && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="bg-amber-500/10"
+                                  onClick={(e) => { e.stopPropagation(); handleMaskedCopy(item); }}
+                                >
+                                  <Shield className="w-4 h-4 text-amber-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('detail.maskedCopy')}</TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}>
+                                <Info className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('detail.title')}</TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className={cn(item.pinned && "bg-primary/10 text-primary")}
+                                onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
+                              >
+                                <Pin className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('actions.pin')}</TooltipContent>
+                          </Tooltip>
+                          
+                          {showDeleteConfirm ? (
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); handleDeleteConfirm(item.id); }}>
+                                {t('actions.confirm')}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }}>
+                                {t('actions.cancel')}
+                              </Button>
+                            </div>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('actions.delete')}</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+              
+              {endIndex < recentItems.length && <div style={{ height: (recentItems.length - endIndex) * ITEM_HEIGHT }} />}
+            </motion.div>
+          )}
+        </div>
+
+        {/* 底部状态栏 */}
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="px-4 py-2 text-xs text-center border-t text-muted-foreground"
+        >
+          {t('status.total', { n: items.length })} | {t('status.showing', { n: filteredItems.length })}
+        </motion.div>
+        
+        <LicenseDialog
+          isOpen={licenseDialogOpen}
+          onClose={() => setLicenseDialogOpen(false)}
+          onActivated={() => {
+            setIsPro(true);
+            refresh();
+          }}
+        />
       </div>
-      
-      <LicenseDialog
-        isOpen={licenseDialogOpen}
-        onClose={() => setLicenseDialogOpen(false)}
-        onActivated={() => {
-          setIsPro(true);
-          refresh();
-        }}
-      />
-    </div>
+    </TooltipProvider>
   );
 }
 
-function TagFilter({ allTags, selectedTag, onSelectTag, t }: { allTags: string[]; selectedTag: string | null; onSelectTag: (tag: string | null) => void; t: (key: string) => string }) {
+function TagFilter({ allTags, selectedTag, onSelectTag, t }: { 
+  allTags: string[]; 
+  selectedTag: string | null; 
+  onSelectTag: (tag: string | null) => void; 
+  t: (key: string) => string 
+}) {
   if (allTags.length === 0) return null;
+  
   return (
-    <div 
-      className="flex items-center gap-2 px-4 py-2.5 border-b overflow-x-auto transition-colors duration-200"
-      style={{ borderColor: 'var(--color-border)' }}
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="flex items-center gap-2 px-4 py-2.5 border-b overflow-x-auto"
     >
-      <Tag className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--color-text-muted)' }} />
-      <button 
-        onClick={() => onSelectTag(null)} 
-        className={`
-          px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all duration-200
-          ${selectedTag === null ? 'btn-primary' : 'btn-secondary'}
-        `}
+      <Tag className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+      <Button
+        variant={selectedTag === null ? "default" : "secondary"}
+        size="sm"
+        className="rounded-full"
+        onClick={() => onSelectTag(null)}
       >
         {t('tags.all')}
-      </button>
+      </Button>
       {allTags.slice(0, 10).map(tag => (
-        <button 
+        <Button 
           key={tag} 
-          onClick={() => onSelectTag(tag === selectedTag ? null : tag)} 
-          className={`
-            px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap flex items-center gap-1 transition-all duration-200
-            ${tag === selectedTag ? 'btn-primary' : 'btn-secondary'}
-          `}
+          variant={tag === selectedTag ? "default" : "secondary"}
+          size="sm"
+          className="rounded-full"
+          onClick={() => onSelectTag(tag === selectedTag ? null : tag)}
         >
-          <Tag className="w-3 h-3" />
+          <Tag className="w-3 h-3 mr-1" />
           {tag}
-        </button>
+        </Button>
       ))}
-      {allTags.length > 10 && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>+{allTags.length - 10}</span>}
-    </div>
+      {allTags.length > 10 && (
+        <span className="text-xs text-muted-foreground">+{allTags.length - 10}</span>
+      )}
+    </motion.div>
   );
 }
 
