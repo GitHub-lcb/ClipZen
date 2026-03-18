@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
-import { X, Edit2, Eye, EyeOff, Tag, Check, RotateCcw, Lock, Unlock, Copy, Shield, Info, Calendar } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  X, Edit2, Eye, EyeOff, Check, RotateCcw, 
+  Lock, Unlock, Copy, Shield, Info, Calendar 
+} from "lucide-react";
 import { TagManager } from "./TagManager";
 import { PasswordDialog } from "./PasswordDialog";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 interface ItemDetailProps {
   item: {
@@ -19,7 +25,6 @@ interface ItemDetailProps {
   onUpdate: () => void;
   t: (key: string) => string;
   enablePasswordProtection?: boolean;
-  enableMaskedCopy?: boolean;
 }
 
 const SENSITIVE_PATTERNS = [
@@ -69,7 +74,10 @@ function detectSensitive(content: string): SensitiveMatch[] {
   return matches;
 }
 
-export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtection = false, enableMaskedCopy = false }: ItemDetailProps) {
+export function ItemDetail({ 
+  item, onClose, onUpdate, t, 
+  enablePasswordProtection = false
+}: ItemDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
   const [isMasked, setIsMasked] = useState(false);
@@ -148,379 +156,320 @@ export function ItemDetail({ item, onClose, onUpdate, t, enablePasswordProtectio
     const maskedContent = getMaskedContentForCopy();
     await invoke("copy_masked_content", { content: maskedContent });
     setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    setTimeout(() => setCopySuccess(false), 1500);
   };
 
-  const handleToggleProtected = async () => {
-    if (!hasGlobalPwd) {
-      setPasswordDialogMode("set");
-      setPasswordDialogOpen(true);
-      setPendingAction("toggle");
-      return;
-    }
-    if (isProtected) {
-      setPasswordDialogMode("verify");
-      setPasswordDialogOpen(true);
-      setPendingAction("toggle");
-    } else {
-      await executeToggleProtected();
-    }
-  };
-
-  const executeToggleProtected = async () => {
+  const handleCopyOriginal = async () => {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("toggle_protected", { id: item.id });
-    setIsProtected(!isProtected);
-    setShowProtectedContent(false);
-    onUpdate();
+    await invoke("copy_to_clipboard", { content: item.content });
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 1500);
   };
 
-  const handleShowProtectedContent = () => {
-    if (!showProtectedContent) {
-      setPasswordDialogMode("verify");
-      setPasswordDialogOpen(true);
-      setPendingAction("show");
-    } else {
-      setShowProtectedContent(false);
-    }
-  };
-
-  const handlePasswordConfirm = async (password: string) => {
-    const { invoke } = await import("@tauri-apps/api/core");
-    
-    if (passwordDialogMode === "set") {
-      await invoke("set_global_password", { password });
-      setHasGlobalPwd(true);
-      setPasswordDialogOpen(false);
-      setPasswordDialogError("");
-      if (pendingAction === "toggle") {
-        await executeToggleProtected();
-      }
-      setPendingAction(null);
-    } else {
-      const isValid = await invoke<boolean>("verify_password", { password });
-      if (isValid) {
-        setPasswordDialogOpen(false);
-        setPasswordDialogError("");
-        if (pendingAction === "toggle") {
-          await executeToggleProtected();
-        } else if (pendingAction === "show") {
-          setShowProtectedContent(true);
-        }
-        setPendingAction(null);
-      } else {
-        setPasswordDialogError(t("password.errorIncorrect"));
-      }
-    }
-  };
-
-  const handlePasswordCancel = () => {
-    setPasswordDialogOpen(false);
-    setPasswordDialogError("");
-    setPendingAction(null);
-  };
-
-  const handleSave = async () => {
-    if (editContent === item.content) {
-      setIsEditing(false);
-      return;
-    }
-    
+  const handleSaveEdit = async () => {
     setSaving(true);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("update_item_content", { itemId: item.id, content: editContent });
+      await invoke("update_content", { id: item.id, newContent: editContent });
       setIsEditing(false);
       onUpdate();
     } catch (error) {
-      console.error("Failed to update content:", error);
+      console.error("Failed to save:", error);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
+  const handleCancelEdit = () => {
     setEditContent(item.content);
     setIsEditing(false);
   };
 
-  const handleTagsChange = (newTags: string[]) => {
-    setTags(newTags);
+  const handleToggleProtected = async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("toggle_protected", { id: item.id });
+    setIsProtected(!isProtected);
     onUpdate();
   };
 
-  return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-50 p-4 animate-fade-in"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-      onClick={onClose}
-    >
-      <div 
-        className="rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col animate-scale-in"
-        style={{ 
-          backgroundColor: 'var(--color-bg-card)',
-          boxShadow: 'var(--shadow-lg)'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div 
-          className="flex items-center justify-between px-6 py-4 border-b transition-colors duration-200"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="p-2 rounded-lg"
-              style={{ backgroundColor: 'var(--color-primary-light)' }}
-            >
-              <Info className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            </div>
-            <h3 
-              className="text-lg font-semibold"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {t('detail.title')}
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="btn-icon"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+  const handlePasswordConfirm = async (password: string) => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const isValid = await invoke<boolean>("verify_password", { password });
+    
+    if (isValid) {
+      setPasswordDialogOpen(false);
+      setPasswordDialogError("");
+      
+      if (pendingAction === "toggle") {
+        await handleToggleProtected();
+      } else if (pendingAction === "show") {
+        setShowProtectedContent(true);
+      }
+      setPendingAction(null);
+    } else {
+      setPasswordDialogError(t('password.incorrect'));
+    }
+  };
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {enablePasswordProtection && (
-            <div 
-              className="flex items-center justify-between p-4 rounded-xl border transition-colors duration-200"
-              style={{ 
-                backgroundColor: 'var(--color-bg)',
-                borderColor: 'var(--color-border)'
-              }}
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 p-2"
+        onClick={(e) => e.target === e.currentTarget && onClose()}
+      >
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ type: "spring", duration: 0.3 }}
+          className="rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col bg-card shadow-lg"
+        >
+          {/* Header */}
+          <div className="glass flex items-center justify-between px-4 py-3 border-b">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <Info className="w-4 h-4 text-primary" />
+              </div>
+              <h2 className="text-base font-semibold">{t('detail.title')}</h2>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Time Info */}
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center gap-2 text-xs text-muted-foreground"
             >
-              <div className="flex items-center gap-3">
-                {isProtected ? (
-                  <Lock className="w-5 h-5" style={{ color: 'var(--color-error)' }} />
-                ) : (
-                  <Unlock className="w-5 h-5" style={{ color: 'var(--color-text-muted)' }} />
-                )}
-                <div>
-                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {t('detail.passwordProtection')}
-                  </span>
-                  {isProtected && (
-                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                      内容已加密保护
-                    </p>
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{formatTime(item.created_at)}</span>
+            </motion.div>
+
+            {/* Image Preview */}
+            {item.item_type === "image" && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <Card className="overflow-hidden">
+                  <img 
+                    src={imageData || item.content} 
+                    alt="Preview" 
+                    className="w-full max-h-64 object-contain"
+                  />
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Content */}
+            {item.item_type !== "image" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium">{t('detail.content')}</h3>
+                  {!isEditing && (
+                    <div className="flex items-center gap-1">
+                      {sensitiveMatches.length > 0 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setIsMasked(!isMasked)}
+                        >
+                          {isMasked ? <Eye className="w-3.5 h-3.5 mr-1" /> : <EyeOff className="w-3.5 h-3.5 mr-1" />}
+                          {isMasked ? t('detail.showOriginal') : t('detail.maskSensitive')}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
+                        <Edit2 className="w-3.5 h-3.5 mr-1" />
+                        {t('detail.edit')}
+                      </Button>
+                    </div>
                   )}
                 </div>
-              </div>
-              <button
-                onClick={handleToggleProtected}
-                className={`
-                  relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200
-                  ${isProtected 
-                    ? 'bg-red-500' 
-                    : 'bg-gray-200 dark:bg-gray-600'
-                  }
-                `}
-                style={!isProtected ? { backgroundColor: 'var(--color-border)' } : undefined}
-              >
-                <span
-                  className={`
-                    inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200
-                    ${isProtected ? 'translate-x-6' : 'translate-x-1'}
-                  `}
-                />
-              </button>
-            </div>
-          )}
-
-          {enableMaskedCopy && sensitiveMatches.length > 0 && !isEditing && (
-            <div 
-              className="p-4 rounded-xl border animate-slide-up"
-              style={{ 
-                backgroundColor: 'var(--color-warning-light)',
-                borderColor: 'transparent'
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Shield className="w-4 h-4" style={{ color: 'var(--color-warning)' }} />
-                <span className="text-sm font-medium" style={{ color: 'var(--color-warning)' }}>
-                  {t('detail.sensitiveDetected')}: {sensitiveMatches.map(m => m.label).join("、")}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs" style={{ color: 'var(--color-warning)' }}>
-                  {t('detail.copyOptions')}:
-                </span>
-                <button
-                  onClick={async () => {
-                    const { invoke } = await import("@tauri-apps/api/core");
-                    await invoke("copy_to_clipboard", { content: item.content });
-                    setCopySuccess(true);
-                    setTimeout(() => setCopySuccess(false), 2000);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 hover:opacity-90"
-                  style={{ 
-                    backgroundColor: 'var(--color-bg-card)',
-                    color: 'var(--color-text)',
-                    border: '1px solid var(--color-border)'
-                  }}
-                >
-                  <Copy className="w-4 h-4" />
-                  {t('detail.copyOriginal')}
-                </button>
-                <button
-                  onClick={handleCopyMasked}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 hover:opacity-90"
-                  style={{ 
-                    backgroundColor: 'var(--color-warning)',
-                    color: 'white'
-                  }}
-                >
-                  <Copy className="w-4 h-4" />
-                  {copySuccess ? t('detail.copied') : t('detail.copyMasked')}
-                </button>
-                <button
-                  onClick={() => setIsMasked(!isMasked)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200"
-                  style={{ 
-                    backgroundColor: 'var(--color-border)',
-                    color: 'var(--color-text-secondary)'
-                  }}
-                >
-                  {isMasked ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  {isMasked ? t('detail.showOriginal') : t('detail.maskSensitive')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                {t('detail.content')}
-              </label>
-              <div className="flex items-center gap-2">
-                {enablePasswordProtection && isProtected && !isEditing && (
-                  <button
-                    onClick={handleShowProtectedContent}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 btn-secondary"
-                  >
-                    {showProtectedContent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    {showProtectedContent ? t('detail.hideContent') : t('detail.showContent')}
-                  </button>
+                
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full h-32 rounded-lg border bg-background p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={handleCancelEdit}>
+                        {t('actions.cancel')}
+                      </Button>
+                      <Button size="sm" onClick={handleSaveEdit} disabled={saving}>
+                        {saving ? <RotateCcw className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Check className="w-3.5 h-3.5 mr-1" />}
+                        {t('detail.save')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Card className="p-3">
+                    <p className="text-sm whitespace-pre-wrap break-all">
+                      {isProtected && !showProtectedContent ? "****" : displayContent}
+                    </p>
+                  </Card>
                 )}
-                {!isEditing && item.item_type === "text" && (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors duration-200 btn-secondary"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    {t('detail.edit')}
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            {isEditing ? (
-              <div className="space-y-3">
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="input-field h-48 resize-none font-mono text-sm"
-                  autoFocus
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={handleCancel}
-                    className="btn-secondary flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    {t('actions.cancel')}
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="btn-primary flex items-center gap-1.5"
-                  >
-                    {saving ? (
-                      <span className="animate-spin">⏳</span>
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                    {saving ? t('detail.saving') : t('detail.save')}
-                  </button>
-                </div>
-              </div>
-            ) : item.item_type === "image" ? (
-              <div 
-                className="rounded-xl overflow-hidden border"
-                style={{ 
-                  borderColor: 'var(--color-border)',
-                  backgroundColor: 'var(--color-bg)'
-                }}
-              >
-                <img 
-                  src={imageData || item.content} 
-                  alt="Clipboard image" 
-                  className="max-w-full max-h-64 mx-auto"
-                />
-              </div>
-            ) : (
-              <div 
-                className="p-4 rounded-xl border"
-                style={{ 
-                  backgroundColor: 'var(--color-bg)',
-                  borderColor: 'var(--color-border)'
-                }}
-              >
-                <pre 
-                  className="text-sm whitespace-pre-wrap break-all font-mono"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  {enablePasswordProtection && isProtected && !showProtectedContent ? "****" : displayContent}
-                </pre>
-              </div>
+              </motion.div>
             )}
-          </div>
 
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Tag className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-              <label className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                {t('detail.tags')}
-              </label>
-            </div>
-            <TagManager
-              itemId={item.id}
-              currentTags={tags}
-              onTagsChange={handleTagsChange}
-              t={t}
-            />
-          </div>
+            {/* Sensitive Info Warning */}
+            {sensitiveMatches.length > 0 && !isEditing && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs font-medium text-amber-600">{t('detail.sensitiveDetected')}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {sensitiveMatches.map((match, idx) => (
+                    <span 
+                      key={idx}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-600"
+                    >
+                      {match.label}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
-          <div 
-            className="pt-4 border-t"
-            style={{ borderColor: 'var(--color-border)' }}
-          >
-            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              <Calendar className="w-3.5 h-3.5" />
-              <span>创建于 {new Date(item.created_at).toLocaleString()}</span>
-            </div>
+            {/* Copy Options */}
+            {!isEditing && item.item_type === "text" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <h3 className="text-sm font-medium mb-2">{t('detail.copyOptions')}</h3>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={handleCopyOriginal}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1.5" />
+                    {t('detail.copyOriginal')}
+                  </Button>
+                  {sensitiveMatches.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={handleCopyMasked}
+                    >
+                      <Shield className="w-3.5 h-3.5 mr-1.5 text-amber-500" />
+                      {t('detail.maskedCopy')}
+                    </Button>
+                  )}
+                </div>
+                <AnimatePresence>
+                  {copySuccess && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-xs text-green-600 mt-2"
+                    >
+                      <Check className="w-3 h-3 inline mr-1" />
+                      {t('detail.copied')}
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+
+            {/* Password Protection */}
+            {enablePasswordProtection && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+              >
+                <h3 className="text-sm font-medium mb-2">{t('detail.passwordProtection')}</h3>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={isProtected ? "default" : "outline"}
+                    size="sm"
+                    onClick={async () => {
+                      if (isProtected) {
+                        await handleToggleProtected();
+                      } else if (hasGlobalPwd) {
+                        await handleToggleProtected();
+                      } else {
+                        setPasswordDialogMode("set");
+                        setPasswordDialogOpen(true);
+                      }
+                    }}
+                  >
+                    {isProtected ? <Lock className="w-3.5 h-3.5 mr-1.5" /> : <Unlock className="w-3.5 h-3.5 mr-1.5" />}
+                    {isProtected ? t('detail.removeProtection') : t('detail.passwordProtection')}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Tags */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <h3 className="text-sm font-medium mb-2">{t('detail.tags')}</h3>
+              <TagManager 
+                itemId={item.id} 
+                currentTags={tags} 
+                onTagsChange={(newTags) => {
+                  setTags(newTags);
+                  onUpdate();
+                }} 
+                t={t} 
+              />
+            </motion.div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       <PasswordDialog
         isOpen={passwordDialogOpen}
         mode={passwordDialogMode}
         onConfirm={handlePasswordConfirm}
-        onCancel={handlePasswordCancel}
+        onCancel={() => {
+          setPasswordDialogOpen(false);
+          setPendingAction(null);
+          setPasswordDialogError("");
+        }}
         error={passwordDialogError}
         t={t}
       />
-    </div>
+    </AnimatePresence>
   );
 }

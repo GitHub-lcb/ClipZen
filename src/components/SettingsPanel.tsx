@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { Settings, X, Save, RotateCcw, Monitor, Moon, Sun, Globe, Rocket, Database, Download, Upload, Trash2, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Settings, X, Save, RotateCcw, Monitor, Moon, Sun, Globe, 
+  Rocket, Database, Download, Upload, Trash2, Loader2 
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface AppSettings {
   max_history_items: number;
@@ -27,7 +35,10 @@ interface SettingsPanelProps {
   licenseInfo?: any;
 }
 
-export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange, onRefresh, onActivateLicense, isPro, licenseInfo }: SettingsPanelProps) {
+export function SettingsPanel({ 
+  isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange, 
+  onRefresh, onActivateLicense, isPro, licenseInfo 
+}: SettingsPanelProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [savedSettings, setSavedSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -183,322 +194,294 @@ export function SettingsPanel({ isOpen, onClose, t, locale, changeLocale, onFeat
     }
   };
 
-  if (!isOpen || !settings) return null;
-
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-50 animate-fade-in p-2"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-    >
-      <div 
-        className="rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col animate-scale-in"
-        style={{ 
-          backgroundColor: 'var(--color-bg-card)',
-          boxShadow: 'var(--shadow-lg)'
-        }}
-      >
-        <div 
-          className="flex items-center justify-between px-4 py-3 border-b transition-colors duration-200"
-          style={{ borderColor: 'var(--color-border)' }}
+    <AnimatePresence>
+      {isOpen && settings && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 p-2"
+          onClick={(e) => e.target === e.currentTarget && onClose()}
         >
-          <div className="flex items-center gap-2">
-            <div 
-              className="p-1.5 rounded-lg"
-              style={{ backgroundColor: 'var(--color-primary-light)' }}
-            >
-              <Settings className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
-            </div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-              {t('settings.title')}
-            </h2>
-          </div>
-          <button 
-            onClick={onClose} 
-            className="btn-icon"
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.3 }}
+            className="rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col bg-card shadow-lg"
           >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+            {/* Header */}
+            <div className="glass flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-primary/10">
+                  <Settings className="w-4 h-4 text-primary" />
+                </div>
+                <h2 className="text-base font-semibold">{t('settings.title')}</h2>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Pro 激活状态 */}
-          <section>
-            <div 
-              className="rounded-xl p-4 border transition-colors duration-200"
-              style={{ 
-                backgroundColor: isPro ? 'var(--color-primary-light)' : 'var(--color-bg-secondary)',
-                borderColor: isPro ? 'var(--color-primary)' : 'var(--color-border)'
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="p-1.5 rounded-lg"
-                    style={{ backgroundColor: isPro ? 'var(--color-primary)' : 'var(--color-border)' }}
-                  >
-                    <svg className="w-4 h-4" style={{ color: isPro ? 'white' : 'var(--color-text-muted)' }} fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                      {isPro ? 'ClipZen Pro' : '升级到 Pro'}
-                    </h3>
-                    {isPro && licenseInfo && (
-                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                        {licenseInfo.license_type === 'Standard' ? '标准版' : licenseInfo.license_type === 'Family' ? '家庭版' : '企业版'}
-                      </p>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Pro Status */}
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <Card className={cn(
+                  "p-4",
+                  isPro ? "bg-primary/5 border-primary/30" : "bg-muted/50"
+                )}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "p-1.5 rounded-lg",
+                        isPro ? "bg-primary" : "bg-muted"
+                      )}>
+                        <svg className={cn("w-4 h-4", isPro ? "text-white" : "text-muted-foreground")} fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold">
+                          {isPro ? 'ClipZen Pro' : '升级到 Pro'}
+                        </h3>
+                        {isPro && licenseInfo && (
+                          <p className="text-xs text-muted-foreground">
+                            {licenseInfo.license_type === 'Standard' ? '标准版' : licenseInfo.license_type === 'Family' ? '家庭版' : '企业版'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {!isPro && (
+                      <Button size="sm" onClick={onActivateLicense}>
+                        激活
+                      </Button>
                     )}
                   </div>
-                </div>
-                {!isPro && (
-                  <button
-                    onClick={onActivateLicense}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors"
-                    style={{
-                      backgroundColor: 'var(--color-primary)',
-                      color: 'white'
-                    }}
-                  >
-                    激活
-                  </button>
-                )}
-              </div>
-              {!isPro && (
-                <ul className="text-xs space-y-1" style={{ color: 'var(--color-text-muted)' }}>
-                  <li>✓ 加密存储保护</li>
-                  <li>✓ 无限历史记录</li>
-                  <li>✓ 自定义主题</li>
-                  <li>✓ 终身免费更新</li>
-                </ul>
-              )}
-              {isPro && (
-                <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-                  感谢您的支持！您已激活 Pro 版本。
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Globe className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-secondary)' }}>
-                {t('settings.general')}
-              </h3>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label 
-                  className="block text-xs mb-1.5" 
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  {t('settings.maxHistoryItems')}
-                </label>
-                <input 
-                  type="number" 
-                  value={settings.max_history_items} 
-                  onChange={(e) => setSettings({ ...settings, max_history_items: parseInt(e.target.value) || 1000 })} 
-                  className="input-field text-sm"
-                  min="100" 
-                  max="10000" 
-                />
-              </div>
-              <div>
-                <label 
-                  className="block text-xs mb-1.5" 
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  {t('settings.theme')}
-                </label>
-                <div className="flex gap-1.5">
-                  {[
-                    { value: 'system', icon: Monitor },
-                    { value: 'light', icon: Sun },
-                    { value: 'dark', icon: Moon }
-                  ].map(({ value, icon: Icon }) => (
-                    <button
-                      key={value}
-                      onClick={() => setSettings({ ...settings, theme: value })}
-                      className={`
-                        flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium
-                        transition-all duration-200
-                        ${settings.theme === value 
-                          ? 'btn-primary' 
-                          : 'btn-secondary'
-                        }
-                      `}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label 
-                  className="block text-xs mb-1.5" 
-                  style={{ color: 'var(--color-text-secondary)' }}
-                >
-                  {t('settings.language')}
-                </label>
-                <select 
-                  value={settings.language} 
-                  onChange={(e) => setSettings({ ...settings, language: e.target.value })} 
-                  className="input-field text-sm"
-                >
-                  <option value="zh-CN">简体中文</option>
-                  <option value="en-US">English</option>
-                </select>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Rocket className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-secondary)' }}>
-                {t('settings.startup')}
-              </h3>
-            </div>
-            <div className="space-y-2">
-              <label className="flex items-start gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={settings.start_on_boot} 
-                  onChange={(e) => setSettings({ ...settings, start_on_boot: e.target.checked })} 
-                  className="w-4 h-4 rounded mt-0.5"
-                  style={{ accentColor: 'var(--color-primary)' }}
-                />
-                <span className="text-xs" style={{ color: 'var(--color-text)' }}>
-                  {t('settings.startOnBoot')}
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={settings.show_in_tray} 
-                  onChange={(e) => setSettings({ ...settings, show_in_tray: e.target.checked })} 
-                  className="w-4 h-4 rounded"
-                  style={{ accentColor: 'var(--color-primary)' }}
-                />
-                <span className="text-xs" style={{ color: 'var(--color-text)' }}>
-                  {t('settings.showInTray')}
-                </span>
-              </label>
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Database className="w-3.5 h-3.5" style={{ color: 'var(--color-primary)' }} />
-              <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-secondary)' }}>
-                {t('dataManager.title')}
-              </h3>
-            </div>
-            <div className="space-y-2">
-              <button 
-                onClick={exportData} 
-                disabled={exporting} 
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 text-xs disabled:opacity-50"
-                style={{ 
-                  backgroundColor: 'var(--color-bg)',
-                  borderColor: 'var(--color-border)'
-                }}
-              >
-                <Download className="w-4 h-4" style={{ color: 'var(--color-info)' }} />
-                <span style={{ color: 'var(--color-text)' }}>{t('dataManager.export')}</span>
-                {exporting && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" style={{ color: 'var(--color-primary)' }} />}
-              </button>
-              <button 
-                onClick={importData} 
-                disabled={importing} 
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 text-xs disabled:opacity-50"
-                style={{ 
-                  backgroundColor: 'var(--color-bg)',
-                  borderColor: 'var(--color-border)'
-                }}
-              >
-                <Upload className="w-4 h-4" style={{ color: 'var(--color-success)' }} />
-                <span style={{ color: 'var(--color-text)' }}>{t('dataManager.import')}</span>
-                {importing && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" style={{ color: 'var(--color-primary)' }} />}
-              </button>
-              <div className="flex items-center gap-2 pt-1">
-                <button 
-                  onClick={clearData} 
-                  disabled={clearing} 
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all duration-200 disabled:opacity-50"
-                  style={{ 
-                    backgroundColor: 'var(--color-error)',
-                    color: 'white'
-                  }}
-                >
-                  {clearing ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3.5 h-3.5" />
+                  {!isPro && (
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>✓ 加密存储保护</li>
+                      <li>✓ 无限历史记录</li>
+                      <li>✓ 自定义主题</li>
+                      <li>✓ 终身免费更新</li>
+                    </ul>
                   )}
-                  {t('dataManager.clear')}
-                </button>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={keepPinned} 
-                    onChange={(e) => setKeepPinned(e.target.checked)} 
-                    className="w-3.5 h-3.5 rounded"
-                    style={{ accentColor: 'var(--color-primary)' }}
-                  />
-                  <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                    {t('dataManager.keepPinned')}
-                  </span>
-                </label>
+                  {isPro && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      感谢您的支持！您已激活 Pro 版本。
+                    </p>
+                  )}
+                </Card>
+              </motion.section>
+
+              {/* General Settings */}
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Globe className="w-3.5 h-3.5 text-primary" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('settings.general')}
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs mb-1.5 text-muted-foreground">
+                      {t('settings.maxHistoryItems')}
+                    </label>
+                    <Input 
+                      type="number" 
+                      value={settings.max_history_items} 
+                      onChange={(e) => setSettings({ ...settings, max_history_items: parseInt(e.target.value) || 1000 })} 
+                      min="100" 
+                      max="10000" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1.5 text-muted-foreground">
+                      {t('settings.theme')}
+                    </label>
+                    <div className="flex gap-1.5">
+                      {[
+                        { value: 'system', icon: Monitor },
+                        { value: 'light', icon: Sun },
+                        { value: 'dark', icon: Moon }
+                      ].map(({ value, icon: Icon }) => (
+                        <Button
+                          key={value}
+                          variant={settings.theme === value ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setSettings({ ...settings, theme: value })}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs mb-1.5 text-muted-foreground">
+                      {t('settings.language')}
+                    </label>
+                    <select 
+                      value={settings.language} 
+                      onChange={(e) => setSettings({ ...settings, language: e.target.value })} 
+                      className="w-full h-9 rounded-lg border bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="zh-CN">简体中文</option>
+                      <option value="en-US">English</option>
+                    </select>
+                  </div>
+                </div>
+              </motion.section>
+
+              {/* Startup Settings */}
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Rocket className="w-3.5 h-3.5 text-primary" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('settings.startup')}
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.start_on_boot} 
+                      onChange={(e) => setSettings({ ...settings, start_on_boot: e.target.checked })} 
+                      className="w-4 h-4 rounded mt-0.5 accent-primary"
+                    />
+                    <span className="text-xs">{t('settings.startOnBoot')}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={settings.show_in_tray} 
+                      onChange={(e) => setSettings({ ...settings, show_in_tray: e.target.checked })} 
+                      className="w-4 h-4 rounded accent-primary"
+                    />
+                    <span className="text-xs">{t('settings.showInTray')}</span>
+                  </label>
+                </div>
+              </motion.section>
+
+              {/* Data Management */}
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Database className="w-3.5 h-3.5 text-primary" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('dataManager.title')}
+                  </h3>
+                </div>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={exportData} 
+                    disabled={exporting}
+                  >
+                    <Download className="w-4 h-4 mr-2 text-blue-500" />
+                    {t('dataManager.export')}
+                    {exporting && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={importData} 
+                    disabled={importing}
+                  >
+                    <Upload className="w-4 h-4 mr-2 text-green-500" />
+                    {t('dataManager.import')}
+                    {importing && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />}
+                  </Button>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button 
+                      variant="destructive" 
+                      size="sm"
+                      className="flex-1"
+                      onClick={clearData} 
+                      disabled={clearing}
+                    >
+                      {clearing ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                      )}
+                      {t('dataManager.clear')}
+                    </Button>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={keepPinned} 
+                        onChange={(e) => setKeepPinned(e.target.checked)} 
+                        className="w-3.5 h-3.5 rounded accent-primary"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {t('dataManager.keepPinned')}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </motion.section>
+
+              {/* Message */}
+              <AnimatePresence>
+                {message && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className={cn(
+                      "p-3 rounded-lg text-xs",
+                      message.type === 'success' ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+                    )}
+                  >
+                    {message.text}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-4 py-3 border-t">
+              <Button variant="ghost" size="sm" onClick={resetToDefaults}>
+                <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                {t('settings.reset')}
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={onClose}>
+                  {t('actions.cancel')}
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={saveSettings} 
+                  disabled={!hasChanges() || saving}
+                >
+                  <Save className="w-3.5 h-3.5 mr-1.5" />
+                  {saving ? t('settings.saving') : t('settings.save')}
+                </Button>
               </div>
             </div>
-          </section>
-
-          {message && (
-            <div 
-              className={`p-3 rounded-lg text-xs animate-slide-up ${
-                message.type === 'success' ? 'badge-success' : 'badge-error'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-        </div>
-
-        <div 
-          className="flex items-center justify-between px-4 py-3 border-t transition-colors duration-200"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <button 
-            onClick={resetToDefaults} 
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors duration-200 hover:opacity-80"
-            style={{ 
-              backgroundColor: 'var(--color-border)',
-              color: 'var(--color-text-secondary)'
-            }}
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            {t('settings.reset')}
-          </button>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={onClose} 
-              className="btn-secondary text-xs px-3 py-1.5"
-            >
-              {t('actions.cancel')}
-            </button>
-            <button 
-              onClick={saveSettings} 
-              disabled={!hasChanges() || saving}
-              className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {saving ? t('settings.saving') : t('settings.save')}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Tag, X, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface TagManagerProps {
   itemId: string;
@@ -62,63 +65,78 @@ export function TagManager({ itemId, currentTags, onTagsChange, t }: TagManagerP
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {currentTags.map(tag => (
-        <span 
-          key={tag} 
-          className="tag flex items-center gap-1.5"
-        >
-          <Tag className="w-3 h-3" />
-          {tag}
-          <button 
-            onClick={() => removeTag(tag)} 
-            className="ml-0.5 hover:opacity-70 transition-opacity"
+      <AnimatePresence>
+        {currentTags.map(tag => (
+          <motion.span 
+            key={tag}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary"
           >
-            <X className="w-3 h-3" />
-          </button>
-        </span>
-      ))}
-      {showInput ? (
-        <div className="relative">
-          <input
-            type="text"
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => { if (!newTag.trim()) setShowInput(false); }}
-            placeholder={t('tags.addTag')}
-            className="input-field text-xs w-24 py-1"
-            autoFocus
-          />
-        </div>
-      ) : (
-        <button 
-          onClick={() => setShowInput(true)} 
-          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full transition-all duration-200 hover:opacity-80"
-          style={{ 
-            backgroundColor: 'var(--color-border)',
-            color: 'var(--color-text-secondary)'
-          }}
-        >
-          <Plus className="w-3 h-3" />
-          {t('tags.addTag')}
-        </button>
-      )}
+            <Tag className="w-3 h-3" />
+            {tag}
+            <button 
+              onClick={() => removeTag(tag)} 
+              className="ml-0.5 hover:opacity-70 transition-opacity rounded-full hover:bg-primary/20 p-0.5"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </motion.span>
+        ))}
+      </AnimatePresence>
+      
+      <AnimatePresence mode="wait">
+        {showInput ? (
+          <motion.div
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+          >
+            <Input
+              type="text"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => { if (!newTag.trim()) setShowInput(false); }}
+              placeholder={t('tags.addTag')}
+              className="h-7 text-xs w-24"
+              autoFocus
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setShowInput(true)}
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              {t('tags.addTag')}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {availableTags.length > 0 && (
         <div className="w-full mt-2 flex flex-wrap gap-1.5">
           {availableTags.slice(0, 5).map(tag => (
-            <button 
-              key={tag} 
+            <motion.button 
+              key={tag}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => addTag(tag)}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full transition-all duration-200 hover:scale-105"
-              style={{ 
-                backgroundColor: 'var(--color-border)',
-                color: 'var(--color-text-secondary)'
-              }}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
             >
               <Plus className="w-3 h-3" />
               <Tag className="w-3 h-3" />
               {tag}
-            </button>
+            </motion.button>
           ))}
         </div>
       )}
