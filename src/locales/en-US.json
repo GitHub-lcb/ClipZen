@@ -93,7 +93,9 @@
   "keyboard": {
     "navigate": "↑↓ Navigate",
     "copy": "Enter Copy",
-    "delete": "Del Delete"
+    "delete": "Del Delete",
+    "top": "Go to Top",
+    "bottom": "Go to Bottom"
   },
   "image": {
     "label": "Image",

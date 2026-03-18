@@ -93,7 +93,9 @@
   "keyboard": {
     "navigate": "↑↓导航",
     "copy": "Enter复制",
-    "delete": "Del删除"
+    "delete": "Del删除",
+    "top": "回到顶部",
+    "bottom": "回到底部"
   },
   "image": {
     "label": "图片",

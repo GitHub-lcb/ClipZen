@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useClipboard, ClipboardItem } from "./hooks/useClipboard";
 import { useI18n } from "./hooks/useI18n";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -93,6 +93,10 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [startIndex, setStartIndex] = useState(0);
+  const [endIndex, setEndIndex] = useState(50);
+  const ITEM_HEIGHT = 120; // 估算每个 item 的高度
+  const MAX_VISIBLE_ITEMS = 50; // 虚拟滚动最大显示数量
 
   useEffect(() => {
     const loadFeatureSettings = async () => {
@@ -149,7 +153,7 @@ function App() {
       );
     }
     
-    // 排序逻辑
+    // 排序逻辑 - 优化：最近复制的排在最前面
     const sorted = [...result].sort((a, b) => {
       // 置顶始终在前
       if (a.pinned !== b.pinned) {
@@ -171,6 +175,11 @@ function App() {
           const bContent = b.item_type === "image" ? "" : (b.preview || b.content).toLowerCase();
           return aContent.localeCompare(bContent, "zh-CN") * multiplier;
         case "popularity":
+          // 优化：优先按最近复制时间排序，其次按复制次数
+          const aLastCopy = a.updated_at || a.created_at;
+          const bLastCopy = b.updated_at || b.created_at;
+          const copyTimeDiff = bLastCopy - aLastCopy; // 最近复制的在前
+          if (copyTimeDiff !== 0) return copyTimeDiff;
           const aCount = a.copy_count || 0;
           const bCount = b.copy_count || 0;
           const countDiff = aCount - bCount;
@@ -209,6 +218,50 @@ function App() {
     scrollToSelectedItem();
   }, [selectedIndex, scrollToSelectedItem]);
 
+  // 虚拟滚动 - 优化大数据量性能
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const scrollTop = container.scrollTop;
+    const containerHeight = container.clientHeight;
+    
+    const newStartIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 10);
+    const newEndIndex = Math.min(
+      recentItems.length,
+      Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 10
+    );
+    
+    // 限制最大显示数量
+    const visibleCount = newEndIndex - newStartIndex;
+    if (visibleCount > MAX_VISIBLE_ITEMS) {
+      const adjustedStart = newStartIndex + Math.floor((visibleCount - MAX_VISIBLE_ITEMS) / 2);
+      setStartIndex(adjustedStart);
+      setEndIndex(adjustedStart + MAX_VISIBLE_ITEMS);
+    } else {
+      setStartIndex(newStartIndex);
+      setEndIndex(newEndIndex);
+    }
+  }, [recentItems.length]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    container.addEventListener('scroll', handleScroll);
+    handleScroll(); // 初始化
+    
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [handleScroll]);
+
+  // 重置虚拟滚动索引当数据变化时
+  useEffect(() => {
+    setStartIndex(0);
+    setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
+  }, [recentItems.length, searchQuery, selectedTag, sortBy, sortOrder]);
+
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -224,6 +277,27 @@ function App() {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedIndex(prev => Math.max(prev - 1, 0));
+        return;
+      }
+      // Home 键：跳转到第一个
+      if (e.key === 'Home') {
+        e.preventDefault();
+        setSelectedIndex(pinnedItems.length); // 跳到最近列表第一个
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
+      }
+      // End 键：跳转到最后一个
+      if (e.key === 'End') {
+        e.preventDefault();
+        setSelectedIndex(allFilteredItems.length - 1);
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ 
+            top: scrollContainerRef.current.scrollHeight, 
+            behavior: 'smooth' 
+          });
+        }
         return;
       }
       if (e.key === 'Enter' && selectedIndex >= 0) {
@@ -254,7 +328,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [allFilteredItems, selectedIndex]);
+  }, [allFilteredItems, selectedIndex, pinnedItems.length]);
 
   const handleCopyWithFeedback = async (item: ClipboardItem) => {
     await copyToClipboard(item);
@@ -645,9 +719,38 @@ function App() {
             <Clipboard className="w-3.5 h-3.5" />
             <span>{t('recent.title')}</span>
           </div>
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            {t('keyboard.navigate')} {t('keyboard.copy')} {t('keyboard.delete')}
-          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+                  setSelectedIndex(pinnedItems.length);
+                }
+              }}
+              className="btn-icon"
+              title={t('keyboard.top') || '回到顶部'}
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {
+                if (scrollContainerRef.current) {
+                  scrollContainerRef.current.scrollTo({ 
+                    top: scrollContainerRef.current.scrollHeight, 
+                    behavior: 'smooth' 
+                  });
+                  setSelectedIndex(allFilteredItems.length - 1);
+                }
+              }}
+              className="btn-icon"
+              title={t('keyboard.bottom') || '回到底部'}
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {t('keyboard.navigate')} {t('keyboard.copy')} {t('keyboard.delete')}
+            </span>
+          </div>
         </div>
         {recentItems.length === 0 ? (
           <div className="text-center py-16 animate-fade-in">
@@ -662,8 +765,14 @@ function App() {
           </div>
         ) : (
           <div className="space-y-3">
-            {recentItems.map((item, idx) => {
-              const globalIdx = pinnedItems.length + idx;
+            {/* 虚拟滚动：顶部占位 */}
+            {startIndex > 0 && (
+              <div style={{ height: startIndex * ITEM_HEIGHT }} />
+            )}
+            {/* 渲染可见范围内的项目 */}
+            {recentItems.slice(startIndex, endIndex).map((item, idx) => {
+              const actualIdx = startIndex + idx;
+              const globalIdx = pinnedItems.length + actualIdx;
               const isSelected = selectedIndex === globalIdx;
               const showDeleteConfirm = deleteConfirmId === item.id;
               const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
@@ -835,6 +944,10 @@ function App() {
                 </div>
               );
             })}
+            {/* 虚拟滚动：底部占位 */}
+            {endIndex < recentItems.length && (
+              <div style={{ height: (recentItems.length - endIndex) * ITEM_HEIGHT }} />
+            )}
           </div>
         )}
       </div>
