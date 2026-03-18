@@ -41,6 +41,16 @@
     ],
     "category": "Utility",
     "shortDescription": "小安剪贴板 - 快、稳、简单、隐私、离线",
-    "longDescription": "ClipZen 是一款本地剪贴板管理工具，自动记录剪贴板历史，支持快速搜索、置顶常用内容，纯本地存储保护隐私。"
+    "longDescription": "ClipZen 是一款本地剪贴板管理工具，自动记录剪贴板历史，支持快速搜索、置顶常用内容，纯本地存储保护隐私。",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true
+      },
+      "wix": {
+        "language": "zh-CN"
+      }
+    }
   }
 }
