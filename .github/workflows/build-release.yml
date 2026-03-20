@@ -11,18 +11,28 @@ permissions:
 
 jobs:
   build:
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest, macos-latest, ubuntu-22.04]
+        include:
+          - platform: 'windows-latest'
+            args: ''
+          - platform: 'macos-latest'
+            args: '--target universal-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
 
     runs-on: ${{ matrix.platform }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,47 +40,41 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-1 libappindicator3-dev librsvg2-dev libgtk-3-dev
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Tauri App
+      - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: ClipZen ${{ github.ref_name }}
+          releaseName: 'ClipZen ${{ github.ref_name }}'
+          releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
 
-      - name: Upload artifacts (Windows)
+      - name: Create Windows portable package
         if: matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            src-tauri/target/release/clipzen.exe
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
-
-      - name: Create Windows Portable ZIP
-        if: matrix.platform == 'windows-latest'
+        shell: pwsh
         run: |
-          mkdir -p portable
-          cp src-tauri/target/release/clipzen.exe portable/ClipZen-Portable.exe
-          cp -r src-tauri/icons/icon.ico portable/icon.ico 2>/dev/null || true
-          Compress-Archive -Path portable/* -DestinationPath ClipZen-Portable-${{ github.ref_name }}.zip
+          New-Item -ItemType Directory -Force -Path portable | Out-Null
+          Copy-Item src-tauri/target/release/clipzen.exe portable/ClipZen-Portable.exe -Force
+          if (Test-Path src-tauri/icons/icon.ico) {
+            Copy-Item src-tauri/icons/icon.ico portable/icon.ico -Force
+          }
+          Compress-Archive -Path portable/* -DestinationPath ClipZen-Portable-${{ github.ref_name }}.zip -Force
 
       - name: Upload Windows Portable
         if: matrix.platform == 'windows-latest'
@@ -79,7 +83,7 @@ jobs:
           name: windows-portable
           path: ClipZen-Portable-${{ github.ref_name }}.zip
 
-      - name: Upload Portable to Release
+      - name: Upload Windows Portable to Release
         if: matrix.platform == 'windows-latest'
         uses: softprops/action-gh-release@v1
         with:
@@ -87,6 +91,16 @@ jobs:
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows build artifact
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            src-tauri/target/release/clipzen.exe
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
 
       - name: Upload artifacts (macOS)
         if: matrix.platform == 'macos-latest'

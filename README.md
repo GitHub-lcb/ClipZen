@@ -158,3 +158,8 @@ ClipZen 提供免费版和 Pro 版本：
 **反馈：** [提交 Issue](https://github.com/lcb/ClipZen/issues)
 
 **社群：** [QQ 群](待创建) <!-- 上架后创建 -->
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for contributor workflow, checks, and PR expectations.
+
