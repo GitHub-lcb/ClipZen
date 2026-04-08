@@ -533,7 +533,11 @@ function App() {
           className="glass flex items-center gap-3 px-4 py-3 border-b sticky top-0 z-10"
         >
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            {searchLoading ? (
+              <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+            ) : (
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            )}
             <Input
               ref={searchInputRef}
               type="text"
@@ -1017,7 +1021,7 @@ function App() {
           animate={{ y: 0, opacity: 1 }}
           className="px-4 py-2 text-xs text-center border-t text-muted-foreground"
         >
-          {t('status.total', { n: items.length })} | {t('status.showing', { n: filteredItems.length })}
+          {t('status.total', { n: totalItems })} | {t('status.showing', { n: filteredItems.length })}
         </motion.div>
         
         <LicenseDialog

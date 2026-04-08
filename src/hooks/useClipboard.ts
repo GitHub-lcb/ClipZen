@@ -21,7 +21,7 @@ export function useClipboard() {
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const pageSize = 50;
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -185,7 +185,6 @@ export function useClipboard() {
     loadingMore,
     totalItems,
     currentPage,
-    pageSize,
     hasMore,
     loadMore,
     copyToClipboard,
