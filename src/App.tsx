@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, 
-  Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
+  Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown 
 } from "lucide-react";
 import { useClipboard, ClipboardItem } from "@/hooks/useClipboard";

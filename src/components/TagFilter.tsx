@@ -1,8 +1,6 @@
-import React from "react";
 import { motion } from "framer-motion";
 import { Tag } from "lucide-react";
 import { Button } from "./ui/button";
-import { cn } from "@/lib/utils";
 
 interface TagFilterProps {
   allTags: string[];

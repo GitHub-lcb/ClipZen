@@ -8,7 +8,7 @@ interface LicenseDialogProps {
   onActivated: () => void;
 }
 
-interface LicenseInfo {
+export interface LicenseInfo {
   code: string;
   machine_id: string;
   activated_at: number;
