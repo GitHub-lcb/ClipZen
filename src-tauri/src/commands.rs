@@ -1,18 +1,52 @@
 // Tauri 命令处理模块
 
 use crate::clipboard::{ClipboardManager, ClipboardContent};
-use crate::storage::Storage;
+use crate::storage::{Storage, encrypt_data, decrypt_data};
 use crate::settings::{SettingsManager, AppSettings, hash_password, verify_password_hash};
 use crate::license::{LicenseManager, LicenseInfo, LicenseType, ActivationResult};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use tauri::State;
 use std::sync::{Arc, Mutex};
 use std::fs;
 use std::path::PathBuf;
 
 #[tauri::command]
-pub fn get_clipboard_history(storage: State<Arc<Mutex<Storage>>>) -> Vec<crate::storage::ClipboardItem> {
+pub fn get_clipboard_history(storage: State<Arc<Mutex<Storage>>>, settings: State<Arc<Mutex<SettingsManager>>>) -> Vec<crate::storage::ClipboardItem> {
     let storage = storage.lock().unwrap();
-    storage.get_all_items().unwrap_or_default()
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    let mut items = storage.get_all_items().unwrap_or_default();
+    decrypt_sensitive_items(&mut items, &app_settings);
+    items
+}
+
+#[tauri::command]
+pub fn get_clipboard_history_paginated(
+    page: u32,
+    page_size: u32,
+    storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> (Vec<crate::storage::ClipboardItem>, u32) {
+    let storage = storage.lock().unwrap();
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    let all_items = storage.get_all_items().unwrap_or_default();
+    let total_count = all_items.len() as u32;
+    
+    // 计算分页
+    let start = (page - 1) * page_size;
+    let end = start + page_size;
+    let paginated_items: Vec<_> = all_items.into_iter()
+        .skip(start as usize)
+        .take(page_size as usize)
+        .collect();
+    
+    let mut items = paginated_items;
+    decrypt_sensitive_items(&mut items, &app_settings);
+    
+    (items, total_count)
 }
 
 #[tauri::command]
@@ -20,9 +54,33 @@ pub fn get_clipboard_history_sorted(
     sort_by: String,
     sort_order: String,
     storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
 ) -> Vec<crate::storage::ClipboardItem> {
     let storage = storage.lock().unwrap();
-    storage.get_items_sorted(&sort_by, &sort_order).unwrap_or_default()
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    let mut items = storage.get_items_sorted(&sort_by, &sort_order).unwrap_or_default();
+    decrypt_sensitive_items(&mut items, &app_settings);
+    items
+}
+
+/// 解密敏感信息
+fn decrypt_sensitive_items(items: &mut Vec<crate::storage::ClipboardItem>, settings: &AppSettings) {
+    if let Some(encryption_key_str) = &settings.encryption_key {
+        if let Ok(encryption_key) = STANDARD.decode(encryption_key_str) {
+            for item in items {
+                if item.content.starts_with("ENCRYPTED:") {
+                    let encrypted_part = item.content.trim_start_matches("ENCRYPTED:");
+                    if let Ok(decrypted) = crate::storage::decrypt_data(encrypted_part, &encryption_key) {
+                        item.content = decrypted;
+                        // 更新预览
+                        item.preview = item.content.chars().take(100).collect();
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -30,9 +88,26 @@ pub fn save_to_history(
     content: String,
     _item_type: String,
     storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
 ) -> String {
     let storage = storage.lock().unwrap();
-    storage.save_clipboard_item(&content).unwrap_or_default()
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    let mut processed_content = content;
+    
+    // 检测并加密敏感信息
+    if crate::storage::contains_sensitive_info(&content) {
+        if let Some(encryption_key_str) = &app_settings.encryption_key {
+            if let Ok(encryption_key) = STANDARD.decode(encryption_key_str) {
+                if let Ok(encrypted) = crate::storage::encrypt_data(&content, &encryption_key) {
+                    processed_content = format!("ENCRYPTED:{}", encrypted);
+                }
+            }
+        }
+    }
+    
+    storage.save_clipboard_item(&processed_content).unwrap_or_default()
 }
 
 #[tauri::command]
@@ -133,7 +208,7 @@ pub fn get_current_clipboard_content(
 }
 
 /// 复制图片到剪贴板（统一入口）
-/// 优先从文件路径读取，失败则从 base64 数据解码
+/// 从文件路径读取图片
 #[tauri::command]
 pub fn copy_image(
     item_id: String,
@@ -155,16 +230,10 @@ pub fn copy_image(
         if let Ok(data) = fs::read(file_path) {
             image_data = data;
         } else {
-            drop(storage_guard);
-            let decoded = crate::storage::base64_decode(&item.content)
-                .map_err(|e| format!("Failed to decode base64: {}", e))?;
-            image_data = decoded;
+            return Err(format!("Failed to read image file: {}", file_path));
         }
     } else {
-        drop(storage_guard);
-        let decoded = crate::storage::base64_decode(&item.content)
-            .map_err(|e| format!("Failed to decode base64: {}", e))?;
-        image_data = decoded;
+        return Err("Image file path not found".to_string());
     }
     
     let clipboard_guard = clipboard.lock().unwrap();
@@ -373,10 +442,44 @@ pub fn update_item_content(
 pub fn get_items_by_tag(
     tag: String,
     storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
 ) -> Vec<crate::storage::ClipboardItem> {
     let storage = storage.lock().unwrap();
-    if let Ok(items) = storage.get_all_items() {
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    if let Ok(mut items) = storage.get_all_items() {
+        decrypt_sensitive_items(&mut items, &app_settings);
         items.into_iter().filter(|i| i.tags.contains(&tag)).collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// 搜索剪贴板记录
+#[tauri::command]
+pub fn search_clipboard_history(
+    query: String,
+    storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> Vec<crate::storage::ClipboardItem> {
+    let storage = storage.lock().unwrap();
+    let settings_manager = settings.lock().unwrap();
+    let app_settings = settings_manager.load();
+    
+    if let Ok(mut items) = storage.get_all_items() {
+        let query_lower = query.to_lowercase();
+        let mut filtered_items: Vec<_> = items.into_iter()
+            .filter(|item| {
+                item.item_type == "image" ||
+                item.content.to_lowercase().contains(&query_lower) ||
+                item.preview.to_lowercase().contains(&query_lower) ||
+                item.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+            })
+            .collect();
+        
+        decrypt_sensitive_items(&mut filtered_items, &app_settings);
+        filtered_items
     } else {
         Vec::new()
     }

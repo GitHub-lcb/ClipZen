@@ -19,18 +19,54 @@ export interface ClipboardItem {
 export function useClipboard() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // 加载历史记录
-  const loadItems = useCallback(async () => {
+  // 加载历史记录（分页）
+  const loadItems = useCallback(async (page: number = 1, reset: boolean = false) => {
     try {
-      const result = await invoke<ClipboardItem[]>("get_clipboard_history");
-      setItems(result);
+      if (reset) {
+        setLoading(true);
+      }
+      
+      const [result, total] = await invoke<[ClipboardItem[], number]>("get_clipboard_history_paginated", {
+        page,
+        page_size: pageSize
+      });
+      
+      if (reset) {
+        setItems(result);
+      } else {
+        setItems(prev => [...prev, ...result]);
+      }
+      
+      setTotalItems(total);
+      setHasMore(result.length === pageSize);
+      setCurrentPage(page);
     } catch (error) {
       console.error("Failed to load clipboard history:", error);
+      // 添加错误状态
+      setError("Failed to load clipboard history. Please try again.");
+      // 3秒后清除错误
+      setTimeout(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pageSize]);
+
+  // 加载更多数据
+  const loadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      setLoadingMore(true);
+      loadItems(currentPage + 1, false).finally(() => {
+        setLoadingMore(false);
+      });
+    }
+  }, [loading, hasMore, currentPage, loadItems]);
 
   // 复制到剪贴板
   const copyToClipboard = useCallback(async (item: ClipboardItem) => {
@@ -53,6 +89,7 @@ export function useClipboard() {
     try {
       await invoke("delete_history_item", { id });
       setItems(prev => prev.filter(item => item.id !== id));
+      setTotalItems(prev => prev - 1);
     } catch (error) {
       console.error("Failed to delete:", error);
     }
@@ -130,10 +167,10 @@ export function useClipboard() {
 
   // 监听剪贴板更新
   useEffect(() => {
-    loadItems();
+    loadItems(1, true);
 
     const unlisten = listen("clipboard-updated", () => {
-      loadItems();
+      loadItems(1, true);
     });
 
     return () => {
@@ -144,6 +181,13 @@ export function useClipboard() {
   return {
     items,
     loading,
+    error,
+    loadingMore,
+    totalItems,
+    currentPage,
+    pageSize,
+    hasMore,
+    loadMore,
     copyToClipboard,
     deleteItem,
     togglePin,
@@ -152,6 +196,6 @@ export function useClipboard() {
     verifyPassword,
     hasGlobalPassword,
     setGlobalPassword,
-    refresh: loadItems,
+    refresh: () => loadItems(1, true),
   };
 }
