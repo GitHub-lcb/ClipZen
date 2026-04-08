@@ -36,6 +36,7 @@ pub fn run() {
         .manage(license.clone())
         .invoke_handler(tauri::generate_handler![
             commands::get_clipboard_history,
+            commands::get_clipboard_history_paginated,
             commands::get_clipboard_history_sorted,
             commands::save_to_history,
             commands::delete_history_item,
@@ -56,6 +57,7 @@ pub fn run() {
             commands::remove_tag_from_item,
             commands::update_item_content,
             commands::get_items_by_tag,
+            commands::search_clipboard_history,
             commands::set_autostart,
             commands::set_global_password,
             commands::verify_password,
@@ -188,7 +190,8 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
                         let file_path = images_dir.join(format!("{}.png", timestamp));
                         
                         if fs::write(&file_path, &image_data).is_ok() {
-                            let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(50000)]));
+                            // 生成更小的预览图，减少内存使用
+                            let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(5000)]));
                             
                             let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap(), &hash_str);
                             let max_items = settings.load().max_history_items;

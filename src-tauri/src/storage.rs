@@ -6,6 +6,12 @@ use uuid::Uuid;
 use chrono::Utc;
 use std::path::PathBuf;
 use dirs::data_dir;
+use std::fs;
+use std::io::Write;
+
+// 加密相关导入
+use aes_gcm::{Aes256Gcm, KeyInit, aead::{Aead, Nonce}};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClipboardItem {
@@ -148,7 +154,7 @@ impl Storage {
             [
                 &id,
                 "image",
-                &base64_encode(image_data),
+                "", // 不再存储 base64 编码，只存储文件路径
                 preview_base64,
                 &0.to_string(),
                 &0.to_string(),
@@ -425,6 +431,27 @@ impl Storage {
     }
 }
 
+/// 检测敏感信息
+pub fn contains_sensitive_info(content: &str) -> bool {
+    // 检测手机号
+    if content.contains(r#"1[3-9]\d{9}"#) {
+        return true;
+    }
+    // 检测邮箱
+    if content.contains(r#"[\w.-]+@[\w.-]+\.\w+"#) {
+        return true;
+    }
+    // 检测身份证号
+    if content.contains(r#"\d{17}[\dXx]"#) {
+        return true;
+    }
+    // 检测银行卡号
+    if content.contains(r#"\b\d{16,19}\b"#) {
+        return true;
+    }
+    false
+}
+
 impl Default for Storage {
     fn default() -> Self {
         Self::new().expect("Failed to initialize storage")
@@ -501,4 +528,39 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     }
     
     Ok(result)
+}
+
+/// 生成加密密钥
+pub fn generate_encryption_key() -> Vec<u8> {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut key = vec![0u8; 32]; // 256 bits for AES-256
+    rng.fill(&mut key[..]);
+    key
+}
+
+/// 加密数据
+pub fn encrypt_data(data: &str, key: &[u8]) -> Result<String, String> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let nonce = Nonce::<Aes256Gcm>::from_slice(&[0; 12]); // 12-byte nonce
+    
+    let ciphertext = cipher.encrypt(nonce, data.as_bytes())
+        .map_err(|e| format!("Failed to encrypt: {}", e))?;
+    
+    Ok(STANDARD.encode(ciphertext))
+}
+
+/// 解密数据
+pub fn decrypt_data(encrypted: &str, key: &[u8]) -> Result<String, String> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
+    let nonce = Nonce::<Aes256Gcm>::from_slice(&[0; 12]); // 12-byte nonce
+    
+    let ciphertext = STANDARD.decode(encrypted)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+    
+    let plaintext = cipher.decrypt(nonce, &ciphertext[..])
+        .map_err(|e| format!("Failed to decrypt: {}", e))?;
+    
+    String::from_utf8(plaintext)
+        .map_err(|e| format!("Failed to convert to string: {}", e))
 }

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Clipboard, Search, Pin, Trash2, Image as ImageIcon, Settings as SettingsIcon, 
-  Tag, Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
+  Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown 
 } from "lucide-react";
 import { useClipboard, ClipboardItem } from "@/hooks/useClipboard";
@@ -22,6 +22,8 @@ import {
   TooltipTrigger,
   TooltipProvider 
 } from "@/components/ui/tooltip";
+import { TagFilter } from "@/components/TagFilter";
+import type { LicenseInfo } from "@/components/LicenseDialog";
 import { cn } from "@/lib/utils";
 
 const SENSITIVE_PATTERNS = [
@@ -119,8 +121,10 @@ function App() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
-  const [licenseInfo, setLicenseInfo] = useState<any>(null);
-  const { items, loading, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const { items, loading, error, loadingMore, totalItems, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -169,19 +173,35 @@ function App() {
     return Array.from(tags).sort();
   }, [items]);
 
+  // 搜索处理
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchLoading(true);
+    try {
+      const results = await invoke<ClipboardItem[]>("search_clipboard_history", {
+        query
+      });
+      setSearchedItems(results);
+    } catch (error) {
+      console.error("Failed to search:", error);
+      setSearchedItems([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  // 监听搜索查询变化
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      handleSearch(searchQuery);
+    } else {
+      setSearchedItems([]);
+    }
+  }, [searchQuery, handleSearch]);
+
   const filteredItems = useMemo(() => {
-    let result = items;
+    let result = searchQuery.trim() ? searchedItems : items;
     if (selectedTag) {
       result = result.filter(item => (item.tags || []).includes(selectedTag));
-    }
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(item =>
-        item.item_type === "image" ||
-        item.content.toLowerCase().includes(query) ||
-        item.preview.toLowerCase().includes(query) ||
-        (item.tags || []).some(tag => tag.toLowerCase().includes(query))
-      );
     }
     
     const sorted = [...result].sort((a, b) => {
@@ -218,7 +238,7 @@ function App() {
     });
     
     return sorted;
-  }, [items, selectedTag, searchQuery, sortBy, sortOrder]);
+  }, [items, searchedItems, selectedTag, searchQuery, sortBy, sortOrder]);
 
   const pinnedItems = filteredItems.filter(item => item.pinned);
   const recentItems = filteredItems.filter(item => !item.pinned);
@@ -252,6 +272,12 @@ function App() {
 
     const scrollTop = container.scrollTop;
     const containerHeight = container.clientHeight;
+    const scrollHeight = container.scrollHeight;
+    
+    // 当滚动到接近底部时，加载更多数据
+    if (scrollTop + containerHeight >= scrollHeight - 200 && hasMore) {
+      loadMore();
+    }
     
     const newStartIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 10);
     const newEndIndex = Math.min(
@@ -268,7 +294,7 @@ function App() {
       setStartIndex(newStartIndex);
       setEndIndex(newEndIndex);
     }
-  }, [recentItems.length]);
+  }, [recentItems.length, hasMore, loadMore]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -585,6 +611,20 @@ function App() {
             </Tooltip>
           </div>
         </motion.div>
+        
+        {/* 错误提示 */}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-600 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <SettingsPanel 
           isOpen={settingsOpen} 
@@ -955,6 +995,18 @@ function App() {
               })}
               
               {endIndex < recentItems.length && <div style={{ height: (recentItems.length - endIndex) * ITEM_HEIGHT }} />}
+              
+              {/* 加载更多指示器 */}
+              {loadingMore && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center justify-center py-4"
+                >
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
+                </motion.div>
+              )}
             </motion.div>
           )}
         </div>
@@ -978,48 +1030,6 @@ function App() {
         />
       </div>
     </TooltipProvider>
-  );
-}
-
-function TagFilter({ allTags, selectedTag, onSelectTag, t }: { 
-  allTags: string[]; 
-  selectedTag: string | null; 
-  onSelectTag: (tag: string | null) => void; 
-  t: (key: string) => string 
-}) {
-  if (allTags.length === 0) return null;
-  
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex items-center gap-2 px-4 py-2.5 border-b overflow-x-auto"
-    >
-      <Tag className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-      <Button
-        variant={selectedTag === null ? "default" : "secondary"}
-        size="sm"
-        className="rounded-full"
-        onClick={() => onSelectTag(null)}
-      >
-        {t('tags.all')}
-      </Button>
-      {allTags.slice(0, 10).map(tag => (
-        <Button 
-          key={tag} 
-          variant={tag === selectedTag ? "default" : "secondary"}
-          size="sm"
-          className="rounded-full"
-          onClick={() => onSelectTag(tag === selectedTag ? null : tag)}
-        >
-          <Tag className="w-3 h-3 mr-1" />
-          {tag}
-        </Button>
-      ))}
-      {allTags.length > 10 && (
-        <span className="text-xs text-muted-foreground">+{allTags.length - 10}</span>
-      )}
-    </motion.div>
   );
 }
 

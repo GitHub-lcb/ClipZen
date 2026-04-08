@@ -15,6 +15,7 @@ pub struct AppSettings {
     pub hotkey_show: String,         // 显示/隐藏快捷键
     pub hotkey_copy: String,         // 复制快捷键
     pub global_password: Option<String>, // 全局密码（哈希存储）
+    pub encryption_key: Option<String>, // 加密密钥（base64编码）
     pub enable_password_protection: bool, // 密码保护功能开关
     pub enable_masked_copy: bool,    // 数据脱敏复制功能开关
 }
@@ -31,6 +32,7 @@ impl Default for AppSettings {
             hotkey_show: "Shift+Super+V".to_string(),
             hotkey_copy: "Super+C".to_string(),
             global_password: None,
+            encryption_key: None,
             enable_password_protection: false,
             enable_masked_copy: false,
         }
@@ -57,9 +59,25 @@ impl SettingsManager {
 
     pub fn load(&self) -> AppSettings {
         if let Ok(content) = fs::read_to_string(&self.config_path) {
-            serde_json::from_str(&content).unwrap_or_default()
+            let mut settings = serde_json::from_str(&content).unwrap_or_default();
+            // 如果没有加密密钥，生成一个新的
+            if settings.encryption_key.is_none() {
+                use base64::{Engine as _, engine::general_purpose::STANDARD};
+                let key = crate::storage::generate_encryption_key();
+                settings.encryption_key = Some(STANDARD.encode(key));
+                // 保存生成的密钥
+                self.save(&settings).ok();
+            }
+            settings
         } else {
-            AppSettings::default()
+            let mut settings = AppSettings::default();
+            // 生成新的加密密钥
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            let key = crate::storage::generate_encryption_key();
+            settings.encryption_key = Some(STANDARD.encode(key));
+            // 保存生成的密钥
+            self.save(&settings).ok();
+            settings
         }
     }
 
@@ -86,31 +104,9 @@ impl Default for SettingsManager {
 }
 
 pub fn hash_password(password: &str) -> String {
-    let salt = "clipzen_salt_2024";
-    let mut hash: u64 = 5381;
-    
-    for byte in salt.bytes() {
-        hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
-    }
-    
-    for byte in password.bytes() {
-        hash = hash.wrapping_mul(33).wrapping_add(byte as u64);
-    }
-    
-    let mut result = String::new();
-    let bytes = hash.to_be_bytes();
-    for b in bytes.iter() {
-        result.push_str(&format!("{:02x}", b));
-    }
-    
-    for (i, byte) in password.bytes().enumerate() {
-        result.push_str(&format!("{:02x}", (byte as u64).wrapping_add(hash).wrapping_mul((i + 1) as u64) as u8));
-    }
-    
-    result
+    bcrypt::hash(password, bcrypt::DEFAULT_COST).unwrap_or_default()
 }
 
 pub fn verify_password_hash(password: &str, hash: &str) -> bool {
-    let computed = hash_password(password);
-    computed == hash
+    bcrypt::verify(password, hash).unwrap_or(false)
 }
