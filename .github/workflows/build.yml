@@ -71,29 +71,24 @@ jobs:
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $version = "${{ github.sha }}"
+          $version = "${{ github.ref_type == 'tag' && github.ref_name || github.sha }}"
           $portableDir = "ClipZen-Portable-$version"
           New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
 
-          # Copy main executable
-          Copy-Item src-tauri/target/release/clipzen.exe $portableDir/ClipZen.exe -Force
+          Copy-Item src-tauri/target/release/clipzen.exe "$portableDir/ClipZen.exe" -Force
 
-          # Copy WebView2 bootloader if exists (required for Tauri v2)
           if (Test-Path src-tauri/target/release/WebView2Loader.dll) {
-            Copy-Item src-tauri/target/release/WebView2Loader.dll $portableDir/ -Force
+            Copy-Item src-tauri/target/release/WebView2Loader.dll "$portableDir/" -Force
           }
 
-          # Copy any DLL dependencies
           Get-ChildItem src-tauri/target/release/*.dll -ErrorAction SilentlyContinue | ForEach-Object {
-            Copy-Item $_.FullName $portableDir/ -Force
+            Copy-Item $_.FullName "$portableDir/" -Force
           }
 
-          # Copy icon
           if (Test-Path src-tauri/icons/icon.ico) {
-            Copy-Item src-tauri/icons/icon.ico $portableDir/ -Force
+            Copy-Item src-tauri/icons/icon.ico "$portableDir/" -Force
           }
 
-          # Create a README for portable version
           @"
           # ClipZen Portable (免安装版)
 
@@ -103,14 +98,14 @@ jobs:
           日期: $(Get-Date -Format "yyyy-MM-dd")
           "@ | Out-File -FilePath "$portableDir/README.txt" -Encoding UTF8
 
-          Compress-Archive -Path $portableDir -DestinationPath ClipZen-Portable-$version.zip -Force
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z -mx=9 "ClipZen-Portable-$version.7z" ".\$portableDir\*"
 
       - name: Upload Windows portable artifact
         if: matrix.platform == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: windows-portable
-          path: ClipZen-Portable-*.zip
+          path: ClipZen-Portable-*.7z
 
       - name: Upload Windows build artifact
         if: matrix.platform == 'windows-latest'
