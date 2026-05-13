@@ -123,8 +123,8 @@ function App() {
   const [isPro, setIsPro] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const { items, loading, error, loadingMore, totalItems, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
+  const [, setSearchLoading] = useState(false);
+  const { items, loading, error, loadingMore, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
