@@ -263,7 +263,12 @@ export function ItemDetail({
               </div>
               <h2 className="text-base font-semibold">{t('detail.title')}</h2>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label={t('actions.cancel')}
+            >
               <X className="w-4 h-4" />
             </Button>
           </div>

@@ -634,6 +634,7 @@ function App() {
                   size="icon"
                   className="absolute top-6 right-6"
                   onClick={() => setPreviewImage(null)}
+                  aria-label={t('actions.cancel')}
                 >
                   <X className="w-5 h-5" />
                 </Button>
@@ -666,6 +667,8 @@ function App() {
                   variant="ghost" 
                   size="icon"
                   onClick={() => setShowSortMenu(!showSortMenu)}
+                  aria-label={t('sort.title')}
+                  aria-expanded={showSortMenu}
                   className={cn(showSortMenu && "bg-accent")}
                 >
                   <ArrowUpDown className="w-4 h-4" />
@@ -719,7 +722,12 @@ function App() {
             
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setSettingsOpen(true)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label={t('settings.title')}
+                >
                   <SettingsIcon className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -874,6 +882,7 @@ function App() {
                         size="icon"
                         className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
+                        aria-label={t(item.pinned ? 'actions.unpin' : 'actions.pin')}
                       >
                         <Pin className={cn("w-3 h-3", item.pinned && "text-primary")} />
                       </Button>
@@ -907,6 +916,7 @@ function App() {
                         setSelectedIndex(pinnedItems.length);
                       }
                     }}
+                    aria-label={t('keyboard.top')}
                   >
                     <ChevronUp className="w-4 h-4" />
                   </Button>
@@ -927,6 +937,7 @@ function App() {
                         setSelectedIndex(allFilteredItems.length - 1);
                       }
                     }}
+                    aria-label={t('keyboard.bottom')}
                   >
                     <ChevronDown className="w-4 h-4" />
                   </Button>
@@ -1053,7 +1064,12 @@ function App() {
                           {item.item_type === "image" && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}
+                                  aria-label={t('image.preview')}
+                                >
                                   <ImageIcon className="w-4 h-4" />
                                 </Button>
                               </TooltipTrigger>
@@ -1063,7 +1079,12 @@ function App() {
                           
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}
+                                aria-label={t('actions.copy')}
+                              >
                                 <Clipboard className="w-4 h-4" />
                               </Button>
                             </TooltipTrigger>
@@ -1078,6 +1099,7 @@ function App() {
                                   size="icon"
                                   className="bg-amber-500/10"
                                   onClick={(e) => { e.stopPropagation(); handleMaskedCopy(item); }}
+                                  aria-label={t('detail.maskedCopy')}
                                 >
                                   <Shield className="w-4 h-4 text-amber-500" />
                                 </Button>
@@ -1088,7 +1110,12 @@ function App() {
                           
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}
+                                aria-label={t('detail.title')}
+                              >
                                 <Info className="w-4 h-4" />
                               </Button>
                             </TooltipTrigger>
@@ -1102,6 +1129,7 @@ function App() {
                                 size="icon"
                                 className={cn(item.pinned && "bg-primary/10 text-primary")}
                                 onClick={(e) => { e.stopPropagation(); togglePin(item.id); }}
+                                aria-label={t(item.pinned ? 'actions.unpin' : 'actions.pin')}
                               >
                                 <Pin className="w-4 h-4" />
                               </Button>
@@ -1121,7 +1149,12 @@ function App() {
                           ) : (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(item.id); }}
+                                  aria-label={t('actions.delete')}
+                                >
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </TooltipTrigger>

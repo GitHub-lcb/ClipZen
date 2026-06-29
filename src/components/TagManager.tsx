@@ -95,8 +95,10 @@ export function TagManager({
           >
             <Tag className="w-3 h-3" />
             {tag}
-            <button 
-              onClick={() => removeTag(tag)} 
+            <button
+              type="button"
+              onClick={() => removeTag(tag)}
+              aria-label={`${t('actions.delete')} ${tag}`}
               className="ml-0.5 hover:opacity-70 transition-opacity rounded-full hover:bg-primary/20 p-0.5"
             >
               <X className="w-3 h-3" />
@@ -130,6 +132,7 @@ export function TagManager({
             exit={{ opacity: 0 }}
           >
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
@@ -147,6 +150,7 @@ export function TagManager({
           {availableTags.slice(0, 5).map(tag => (
             <motion.button 
               key={tag}
+              type="button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => addTag(tag)}
