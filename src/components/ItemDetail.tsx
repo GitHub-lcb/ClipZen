@@ -183,11 +183,25 @@ export function ItemDetail({
   };
 
   const handlePasswordConfirm = async (password: string) => {
-    const isValid = await invoke<boolean>("verify_password", { password });
-    
-    if (isValid) {
+    try {
+      let isValid: boolean;
+      if (passwordDialogMode === "set") {
+        await invoke("set_global_password", { password });
+        isValid = true;
+      } else {
+        isValid = await invoke<boolean>("verify_password", { password });
+      }
+
+      if (!isValid) {
+        setPasswordDialogError(t('password.incorrect'));
+        return;
+      }
+
       setPasswordDialogOpen(false);
       setPasswordDialogError("");
+      if (passwordDialogMode === "set") {
+        setHasGlobalPwd(true);
+      }
       
       if (pendingAction === "toggle") {
         await handleToggleProtected();
@@ -195,7 +209,8 @@ export function ItemDetail({
         setShowProtectedContent(true);
       }
       setPendingAction(null);
-    } else {
+    } catch (error) {
+      console.error("Failed to handle password:", error);
       setPasswordDialogError(t('password.incorrect'));
     }
   };
@@ -419,6 +434,7 @@ export function ItemDetail({
                       } else if (hasGlobalPwd) {
                         await handleToggleProtected();
                       } else {
+                        setPendingAction("toggle");
                         setPasswordDialogMode("set");
                         setPasswordDialogOpen(true);
                       }
