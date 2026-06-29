@@ -50,6 +50,7 @@ export function SettingsPanel({
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearConfirming, setClearConfirming] = useState(false);
   const [keepPinned, setKeepPinned] = useState(true);
   const messageTimeoutRef = useRef<number | null>(null);
   const closeTimeoutRef = useRef<number | null>(null);
@@ -99,6 +100,7 @@ export function SettingsPanel({
     setExporting(false);
     setImporting(false);
     setClearing(false);
+    setClearConfirming(false);
   }, [isOpen, clearScheduledFeedback]);
 
   useEffect(() => clearScheduledFeedback, [clearScheduledFeedback]);
@@ -214,6 +216,7 @@ export function SettingsPanel({
       setMessage({ type: 'success', text: t('dataManager.clearSuccess', { n: count }) });
       if (onRefresh) onRefresh();
       clearMessageLater(3000);
+      setClearConfirming(false);
     } catch (error) {
       console.error("Failed to clear:", error);
       setMessage({ type: 'error', text: t('dataManager.clearFailed') });
@@ -453,12 +456,18 @@ export function SettingsPanel({
                     {t('dataManager.import')}
                     {importing && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />}
                   </Button>
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Button 
                       variant="destructive" 
                       size="sm"
-                      className="flex-1"
-                      onClick={clearData} 
+                      className="min-w-28 flex-1"
+                      onClick={() => {
+                        if (!clearConfirming) {
+                          setClearConfirming(true);
+                          return;
+                        }
+                        void clearData();
+                      }}
                       disabled={clearing}
                     >
                       {clearing ? (
@@ -466,13 +475,26 @@ export function SettingsPanel({
                       ) : (
                         <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                       )}
-                      {t('dataManager.clear')}
+                      {clearConfirming ? t('actions.confirm') : t('dataManager.clear')}
                     </Button>
+                    {clearConfirming && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setClearConfirming(false)}
+                        disabled={clearing}
+                      >
+                        {t('actions.cancel')}
+                      </Button>
+                    )}
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input 
                         type="checkbox" 
                         checked={keepPinned} 
-                        onChange={(e) => setKeepPinned(e.target.checked)} 
+                        onChange={(e) => {
+                          setKeepPinned(e.target.checked);
+                          setClearConfirming(false);
+                        }}
                         className="w-3.5 h-3.5 rounded accent-primary"
                       />
                       <span className="text-xs text-muted-foreground">
