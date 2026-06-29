@@ -505,10 +505,25 @@ impl Storage {
     }
 
     pub fn delete_item(&self, id: &str) -> Result<()> {
+        let file_to_delete = self
+            .conn
+            .query_row(
+                "SELECT file_path FROM clipboard_items WHERE id = ?1 AND item_type = 'image'",
+                [id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?
+            .flatten();
+
         self.conn.execute(
             "DELETE FROM clipboard_items WHERE id = ?1",
             [id],
         )?;
+
+        if let Some(path) = file_to_delete {
+            std::fs::remove_file(path).ok();
+        }
+
         Ok(())
     }
 
@@ -1245,6 +1260,30 @@ mod tests {
 
         assert_eq!(items[0].id, "recent-copy");
         assert_eq!(items[1].id, "high-count");
+    }
+
+    #[test]
+    fn deleting_image_item_removes_cached_file() {
+        let storage = memory_storage();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "clipzen-delete-image-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let image_path = temp_dir.join("cached-image.png");
+        std::fs::write(&image_path, b"image").unwrap();
+
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('image', 'image', '', 'image', 0, 0, 1, ?1, '[]')",
+            [image_path.to_string_lossy().as_ref()],
+        ).unwrap();
+
+        storage.delete_item("image").unwrap();
+
+        assert!(!image_path.exists());
+        std::fs::remove_dir(&temp_dir).ok();
     }
 
     #[test]
