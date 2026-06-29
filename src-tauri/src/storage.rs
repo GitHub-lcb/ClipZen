@@ -79,10 +79,14 @@ fn parse_tags(tags: Option<&str>) -> Vec<String> {
 }
 
 fn file_list_content_hash(file_paths: &[String]) -> String {
+    let digest = Sha256::digest(normalized_file_paths(file_paths).join("\n").as_bytes());
+    format!("files:{:x}", digest)
+}
+
+fn normalized_file_paths(file_paths: &[String]) -> Vec<String> {
     let mut sorted_paths = file_paths.to_vec();
     sorted_paths.sort();
-    let digest = Sha256::digest(sorted_paths.join("\n").as_bytes());
-    format!("files:{:x}", digest)
+    sorted_paths
 }
 
 impl Storage {
@@ -315,6 +319,11 @@ impl Storage {
         }
 
         if let Some(existing_id) = self.get_file_item_id_by_content(&content)? {
+            self.update_item_timestamp_by_id(&existing_id)?;
+            return Ok(existing_id);
+        }
+
+        if let Some(existing_id) = self.get_file_item_id_by_file_set(file_paths)? {
             self.update_item_timestamp_by_id(&existing_id)?;
             return Ok(existing_id);
         }
@@ -602,6 +611,28 @@ impl Storage {
                 |row| row.get(0),
             )
             .optional()
+    }
+
+    fn get_file_item_id_by_file_set(&self, file_paths: &[String]) -> Result<Option<String>> {
+        let target_paths = normalized_file_paths(file_paths);
+        let mut stmt = self.conn.prepare(
+            "SELECT id, content FROM clipboard_items
+             WHERE item_type = 'files'
+               AND (content_hash IS NULL OR content_hash = '')",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        for row in rows {
+            let (id, content) = row?;
+            let existing_paths = content.lines().map(str::to_string).collect::<Vec<_>>();
+            if normalized_file_paths(&existing_paths) == target_paths {
+                return Ok(Some(id));
+            }
+        }
+
+        Ok(None)
     }
 
     /// 检查哈希是否已存在（用于图片去重）
@@ -1036,6 +1067,31 @@ mod tests {
         assert_eq!(second_id, first_id);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, files.join("\n"));
+    }
+
+    #[test]
+    fn saving_same_file_set_in_different_order_refreshes_legacy_item_without_hash() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('legacy-files', 'files', ?1, 'one.txt, two.txt', 0, 0, 1000, ?2, '[]')",
+            params![
+                "C:\\Users\\clip\\one.txt\nC:\\Users\\clip\\two.txt",
+                "C:\\Users\\clip\\one.txt",
+            ],
+        ).unwrap();
+        let reversed_files = vec![
+            "C:\\Users\\clip\\two.txt".to_string(),
+            "C:\\Users\\clip\\one.txt".to_string(),
+        ];
+
+        let saved_id = storage.save_files_item(&reversed_files).unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(saved_id, "legacy-files");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "C:\\Users\\clip\\one.txt\nC:\\Users\\clip\\two.txt");
     }
 
     #[test]
