@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Key, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { DIALOG_LICENSE_FEATURE_KEYS, getLicenseTypeKey } from '@/lib/license';
@@ -32,6 +32,18 @@ export function LicenseDialog({ isOpen, onClose, onActivated, t }: LicenseDialog
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const closeTimeoutRef = useRef<number | null>(null);
 
+  const handleClose = useCallback(() => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setCode('');
+    setError('');
+    setSuccess(false);
+    setLicenseInfo(null);
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     return () => {
       if (closeTimeoutRef.current !== null) {
@@ -54,6 +66,22 @@ export function LicenseDialog({ isOpen, onClose, onActivated, t }: LicenseDialog
     setLicenseInfo(null);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && e.key !== 'Esc') return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      handleClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [handleClose, isOpen]);
+
   if (!isOpen) return null;
 
   const formatCode = (value: string) => {
@@ -69,18 +97,6 @@ export function LicenseDialog({ isOpen, onClose, onActivated, t }: LicenseDialog
     const formatted = formatCode(e.target.value);
     setCode(formatted);
     setError('');
-  };
-
-  const handleClose = () => {
-    if (closeTimeoutRef.current !== null) {
-      window.clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-    setCode('');
-    setError('');
-    setSuccess(false);
-    setLicenseInfo(null);
-    onClose();
   };
 
   const handleActivate = async () => {
