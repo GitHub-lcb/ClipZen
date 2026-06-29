@@ -90,6 +90,17 @@ export function SettingsPanel({
     if (isOpen) loadSettings();
   }, [isOpen, loadSettings]);
 
+  useEffect(() => {
+    if (isOpen) return;
+
+    clearScheduledFeedback();
+    setMessage(null);
+    setSaving(false);
+    setExporting(false);
+    setImporting(false);
+    setClearing(false);
+  }, [isOpen, clearScheduledFeedback]);
+
   useEffect(() => clearScheduledFeedback, [clearScheduledFeedback]);
 
   useEffect(() => {
