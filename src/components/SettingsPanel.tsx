@@ -141,7 +141,7 @@ export function SettingsPanel({
       enable_password_protection: false,
       enable_masked_copy: false,
     });
-    setMessage({ type: 'success', text: 'Reset to defaults' });
+    setMessage({ type: 'success', text: t('settings.resetSuccess') });
   };
 
   const hasChanges = () => {
@@ -165,7 +165,7 @@ export function SettingsPanel({
       }
     } catch (error) {
       console.error("Failed to export:", error);
-      setMessage({ type: 'error', text: 'Export failed' });
+      setMessage({ type: 'error', text: t('dataManager.exportFailed') });
     } finally {
       setExporting(false);
     }
@@ -189,7 +189,7 @@ export function SettingsPanel({
       }
     } catch (error) {
       console.error("Failed to import:", error);
-      setMessage({ type: 'error', text: 'Import failed' });
+      setMessage({ type: 'error', text: t('dataManager.importFailed') });
     } finally {
       setImporting(false);
     }
