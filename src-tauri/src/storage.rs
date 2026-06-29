@@ -58,13 +58,19 @@ fn clipboard_item_from_row(row: &Row<'_>) -> Result<ClipboardItem> {
 fn parse_tags(tags: Option<&str>) -> Vec<String> {
     tags.and_then(|value| serde_json::from_str(value).ok())
         .map(|tags: Vec<String>| {
+            let mut seen = HashSet::new();
             tags.into_iter()
                 .filter_map(|tag| {
                     let trimmed = tag.trim();
                     if trimmed.is_empty() {
                         None
                     } else {
-                        Some(trimmed.to_string())
+                        let tag = trimmed.to_string();
+                        if seen.insert(tag.clone()) {
+                            Some(tag)
+                        } else {
+                            None
+                        }
                     }
                 })
                 .collect()
@@ -1281,6 +1287,20 @@ mod tests {
         let item = storage.get_item_by_id("legacy").unwrap().unwrap();
 
         assert_eq!(item.tags, vec!["work"]);
+    }
+
+    #[test]
+    fn legacy_duplicate_tags_are_deduped_when_read() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('legacy', 'text', 'content', 'content', 0, 0, 1, '', '[\"work\", \" work \", \"clip\", \"work\"]')",
+            [],
+        ).unwrap();
+
+        let item = storage.get_item_by_id("legacy").unwrap().unwrap();
+
+        assert_eq!(item.tags, vec!["work", "clip"]);
     }
 
     #[test]
