@@ -311,6 +311,10 @@ impl Storage {
 
     /// 保存文件路径列表
     pub fn save_files_item(&self, file_paths: &[String]) -> Result<String> {
+        if file_paths.is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         let content = file_paths.join("\n");
         let content_hash = file_list_content_hash(file_paths);
         if let Some(existing_id) = self.get_item_id_by_hash(&content_hash)? {
@@ -1060,6 +1064,14 @@ mod tests {
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].item_type, "files");
         assert_eq!(items[0].content, files.join("\n"));
+    }
+
+    #[test]
+    fn saving_empty_file_list_is_rejected() {
+        let storage = memory_storage();
+
+        assert!(storage.save_files_item(&[]).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
     }
 
     #[test]
