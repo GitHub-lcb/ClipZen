@@ -491,16 +491,16 @@ impl Storage {
 
     pub fn toggle_pin(&self, id: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE clipboard_items SET pinned = NOT pinned WHERE id = ?1",
-            [id],
+            "UPDATE clipboard_items SET pinned = NOT pinned, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().timestamp_millis(), id],
         )?;
         Ok(())
     }
 
     pub fn toggle_protected(&self, id: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE clipboard_items SET protected = NOT protected WHERE id = ?1",
-            [id],
+            "UPDATE clipboard_items SET protected = NOT protected, updated_at = ?1 WHERE id = ?2",
+            params![Utc::now().timestamp_millis(), id],
         )?;
         Ok(())
     }
@@ -1107,6 +1107,32 @@ mod tests {
 
         let item = storage.get_item_by_id(&id).unwrap().unwrap();
         assert_eq!(item.copy_count, 1);
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn toggling_pin_refreshes_updated_at() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("pin me").unwrap();
+
+        storage.toggle_pin(&id).unwrap();
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert!(item.pinned);
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn toggling_protected_refreshes_updated_at() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("protect me").unwrap();
+
+        storage.toggle_protected(&id).unwrap();
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert!(item.protected);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
     }
