@@ -53,7 +53,7 @@ export function ItemDetail({
   const [pendingAction, setPendingAction] = useState<"toggle" | "show" | null>(null);
   const [hasGlobalPwd, setHasGlobalPwd] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [imageData, setImageData] = useState<string | null>(null);
+  const [loadedImage, setLoadedImage] = useState<{ key: string; data: string } | null>(null);
   const copySuccessTimeoutRef = useRef<number | null>(null);
 
   const showCopySuccess = useCallback(() => {
@@ -77,19 +77,32 @@ export function ItemDetail({
   }, []);
 
   useEffect(() => {
-    if (item.item_type === "image" && item.file_path) {
-      const loadImage = async () => {
-        try {
-          const data = await invoke<string>("get_image_data", { filePath: item.file_path });
-          setImageData(data);
-        } catch (error) {
-          console.error("Failed to load image:", error);
-          setImageData(item.content);
-        }
-      };
-      loadImage();
+    setLoadedImage(null);
+
+    if (item.item_type !== "image" || !item.file_path) {
+      return;
     }
-  }, [item.content, item.file_path, item.item_type]);
+
+    let cancelled = false;
+    const filePath = item.file_path;
+    const imageKey = `${item.id}:${filePath}`;
+
+    const loadImage = async () => {
+      try {
+        const data = await invoke<string>("get_image_data", { filePath });
+        if (!cancelled) setLoadedImage({ key: imageKey, data });
+      } catch (error) {
+        console.error("Failed to load image:", error);
+        if (!cancelled) setLoadedImage({ key: imageKey, data: item.content || item.preview });
+      }
+    };
+
+    void loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, item.content, item.file_path, item.item_type, item.preview]);
 
   useEffect(() => {
     const checkGlobalPassword = async () => {
@@ -117,6 +130,9 @@ export function ItemDetail({
     [item.content, sensitiveMatches]
   );
   const displayContent = isMasked ? maskedContent : item.content;
+  const imageKey = item.file_path ? `${item.id}:${item.file_path}` : "";
+  const imageSource =
+    loadedImage?.key === imageKey ? loadedImage.data : item.preview || item.content;
 
   useEffect(() => {
     setIsProtected(item.protected || false);
@@ -241,7 +257,7 @@ export function ItemDetail({
               >
                 <Card className="overflow-hidden">
                   <img 
-                    src={imageData || item.content} 
+                    src={imageSource}
                     alt={t('image.preview')}
                     className="w-full max-h-64 object-contain"
                   />
