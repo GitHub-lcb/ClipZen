@@ -165,6 +165,8 @@ export function ItemDetail({
     }
 
     await invoke("copy_masked_content", { content: maskedContent });
+    await invoke("increment_copy_count", { id: item.id });
+    onUpdate();
     showCopySuccess();
   };
 
@@ -178,6 +180,8 @@ export function ItemDetail({
     }
 
     await invoke("copy_to_clipboard", { content });
+    await invoke("increment_copy_count", { id: item.id });
+    onUpdate();
     showCopySuccess();
   };
 
