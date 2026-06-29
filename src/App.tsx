@@ -689,6 +689,7 @@ function App() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 className="relative max-w-4xl max-h-[90vh] p-4"
+                onClick={(e) => e.stopPropagation()}
               >
                 <img
                   src={previewImage}
