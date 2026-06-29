@@ -39,6 +39,10 @@ const EMPTY_ITEM_IDS: ReadonlySet<string> = new Set();
 
 type ProtectedItemAction = "copy" | "detail" | "preview";
 
+function isEscapeKey(key: string): boolean {
+  return key === 'Escape' || key === 'Esc';
+}
+
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -121,6 +125,7 @@ function App() {
   const isSearching = searchQuery.trim().length > 0;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const searchRequestRef = useRef(0);
   const copiedTimeoutRef = useRef<number | null>(null);
@@ -410,6 +415,37 @@ function App() {
     setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
   }, [recentItems.length, activeSearchQuery, selectedTag, sortBy, sortOrder]);
 
+  useEffect(() => {
+    if (!showSortMenu) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(target)
+      ) {
+        setShowSortMenu(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!isEscapeKey(event.key)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setShowSortMenu(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [showSortMenu]);
+
   const showCopiedFeedback = useCallback((id: string) => {
     if (copiedTimeoutRef.current !== null) {
       window.clearTimeout(copiedTimeoutRef.current);
@@ -513,17 +549,19 @@ function App() {
         if (item) setDeleteConfirmId(item.id);
         return;
       }
-      if (e.key === 'Escape') {
+      if (isEscapeKey(e.key)) {
         const hasTransientUi =
           deleteConfirmId !== null ||
           previewImage !== null ||
           detailItem !== null ||
           settingsOpen ||
           passwordDialogOpen ||
-          licenseDialogOpen;
+          licenseDialogOpen ||
+          showSortMenu;
 
         setDeleteConfirmId(null);
         setPreviewImage(null);
+        setShowSortMenu(false);
         setSelectedIndex(-1);
         if (detailItem !== null) {
           setDetailItem(null);
@@ -568,6 +606,7 @@ function App() {
     previewImage,
     selectedIndexRef,
     settingsOpen,
+    showSortMenu,
     unlockedItemsRef,
   ]);
 
@@ -751,15 +790,19 @@ function App() {
               onChange={(e) => { setSearchQuery(e.target.value); setSelectedIndex(-1); }}
             />
           </div>
-          <div className="flex items-center gap-1 relative">
+          <div
+            ref={sortMenuRef}
+            className="flex items-center gap-1 relative"
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button 
                   variant="ghost" 
                   size="icon"
-                  onClick={() => setShowSortMenu(!showSortMenu)}
+                  onClick={() => setShowSortMenu(prev => !prev)}
                   aria-label={t('sort.title')}
                   aria-expanded={showSortMenu}
+                  aria-haspopup="menu"
                   className={cn(showSortMenu && "bg-accent")}
                 >
                   <ArrowUpDown className="w-4 h-4" />
@@ -775,6 +818,7 @@ function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className="absolute right-0 top-full mt-1 w-40 rounded-lg shadow-lg border bg-popover z-50"
+                  role="menu"
                 >
                   <div className="p-1">
                     {[
@@ -791,6 +835,8 @@ function App() {
                           "w-full justify-between",
                           sortBy === option.key && "bg-accent text-primary"
                         )}
+                        role="menuitemradio"
+                        aria-checked={sortBy === option.key}
                         onClick={() => {
                           if (sortBy === option.key) {
                             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -798,6 +844,7 @@ function App() {
                             setSortBy(option.key as "time" | "type" | "content" | "popularity");
                             setSortOrder("desc");
                           }
+                          setShowSortMenu(false);
                         }}
                       >
                         <span>{option.label}</span>
@@ -816,7 +863,10 @@ function App() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => {
+                    setShowSortMenu(false);
+                    setSettingsOpen(true);
+                  }}
                   aria-label={t('settings.title')}
                 >
                   <SettingsIcon className="w-4 h-4" />
