@@ -528,6 +528,11 @@ impl Storage {
     }
 
     pub fn remove_tag_from_item(&self, id: &str, tag: &str) -> Result<()> {
+        let tag = tag.trim();
+        if tag.is_empty() {
+            return Ok(());
+        }
+
         let Some(mut item) = self.get_item_by_id(id)? else {
             return Ok(());
         };
@@ -1067,6 +1072,18 @@ mod tests {
         assert!(item.tags.is_empty());
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn removing_tag_trims_input() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("tag me").unwrap();
+        storage.add_tag_to_item(&id, "work").unwrap();
+
+        storage.remove_tag_from_item(&id, " work ").unwrap();
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert!(item.tags.is_empty());
     }
 
     #[test]
