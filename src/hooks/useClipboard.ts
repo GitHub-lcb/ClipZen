@@ -139,13 +139,15 @@ export function useClipboard() {
   }, []);
 
   // 删除记录
-  const deleteItem = useCallback(async (id: string) => {
+  const deleteItem = useCallback(async (id: string): Promise<boolean> => {
     try {
       await invoke("delete_history_item", { id });
       setItems(prev => prev.filter(item => item.id !== id));
       setTotalItems(prev => Math.max(0, prev - 1));
+      return true;
     } catch (error) {
       console.error("Failed to delete:", error);
+      return false;
     }
   }, []);
 

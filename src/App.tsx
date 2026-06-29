@@ -549,7 +549,10 @@ function App() {
   ]);
 
   const handleDeleteConfirm = async (id: string) => {
-    await deleteItem(id);
+    const deleted = await deleteItem(id);
+    if (!deleted) return;
+
+    setSearchedItems(prev => prev.filter(item => item.id !== id));
     setDeleteConfirmId(null);
     setSelectedIndex(-1);
   };
