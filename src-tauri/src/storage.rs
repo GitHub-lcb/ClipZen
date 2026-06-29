@@ -507,19 +507,23 @@ impl Storage {
         
         // 先获取要删除的记录（用于删除文件）
         let mut stmt = self.conn.prepare(
-            "SELECT id, file_path FROM clipboard_items WHERE created_at < ?1 AND pinned = 0"
+            "SELECT id, item_type, file_path
+             FROM clipboard_items
+             WHERE created_at < ?1 AND pinned = 0"
         )?;
-        let items_to_delete: Vec<(String, Option<String>)> = stmt
+        let items_to_delete: Vec<(String, String, Option<String>)> = stmt
             .query_map([cutoff_timestamp.to_string()], |row| {
-                Ok((row.get(0)?, row.get(1)?))
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
             })?
             .filter_map(|r| r.ok())
             .collect();
         
         // 删除文件
-        for (_, file_path) in &items_to_delete {
-            if let Some(path) = file_path {
-                std::fs::remove_file(path).ok();
+        for (_, item_type, file_path) in &items_to_delete {
+            if item_type == "image" {
+                if let Some(path) = file_path {
+                    std::fs::remove_file(path).ok();
+                }
             }
         }
         
@@ -683,7 +687,7 @@ mod tests {
     use super::{
         contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key, Storage,
     };
-    use rusqlite::Connection;
+    use rusqlite::{params, Connection};
 
     fn memory_storage() -> Storage {
         Storage::from_connection(Connection::open_in_memory().unwrap()).unwrap()
@@ -745,6 +749,39 @@ mod tests {
         assert_eq!(item.copy_count, 1);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn auto_cleanup_removes_cached_images_but_preserves_user_files() {
+        let storage = memory_storage();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "clipzen-cleanup-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let image_path = temp_dir.join("cached-image.png");
+        let user_file_path = temp_dir.join("user-file.txt");
+        std::fs::write(&image_path, b"image").unwrap();
+        std::fs::write(&user_file_path, b"user").unwrap();
+
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES
+             ('image', 'image', '', 'image', 0, 0, 1, ?1, '[]'),
+             ('files', 'files', ?2, 'files', 0, 0, 1, ?2, '[]')",
+            params![
+                image_path.to_string_lossy().as_ref(),
+                user_file_path.to_string_lossy().as_ref(),
+            ],
+        ).unwrap();
+
+        assert_eq!(storage.auto_cleanup(1).unwrap(), 2);
+
+        assert!(!image_path.exists());
+        assert!(user_file_path.exists());
+        std::fs::remove_file(&user_file_path).ok();
+        std::fs::remove_dir(&temp_dir).ok();
     }
 
     #[test]
