@@ -144,6 +144,9 @@ impl Storage {
                 self.update_item_timestamp_by_hash(hash)?;
                 return Ok(existing_id);
             }
+        } else if let Some(existing_id) = self.get_text_item_id_by_content(content)? {
+            self.update_item_timestamp_by_id(&existing_id)?;
+            return Ok(existing_id);
         }
 
         let id = Uuid::new_v4().to_string();
@@ -537,6 +540,21 @@ impl Storage {
         Ok(count > 0)
     }
 
+    /// 查找未加密的相同文本记录（用于普通文本去重）
+    fn get_text_item_id_by_content(&self, content: &str) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT id FROM clipboard_items
+                 WHERE item_type = 'text'
+                   AND content = ?1
+                   AND content_hash IS NULL
+                 LIMIT 1",
+                [content],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
     /// 检查哈希是否已存在（用于图片去重）
     pub fn hash_exists(&self, hash: &str) -> Result<bool> {
         let mut stmt = self.conn.prepare(
@@ -557,6 +575,14 @@ impl Storage {
     }
 
     /// 更新已存在记录的时间戳（用于去重时提升到顶部）
+    fn update_item_timestamp_by_id(&self, id: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE clipboard_items SET created_at = ?1 WHERE id = ?2",
+            [Utc::now().timestamp_millis().to_string(), id.to_string()],
+        )?;
+        Ok(())
+    }
+
     pub fn update_item_timestamp_by_hash(&self, hash: &str) -> Result<()> {
         self.conn.execute(
             "UPDATE clipboard_items SET created_at = ?1 WHERE content_hash = ?2",
@@ -888,6 +914,19 @@ mod tests {
         assert_eq!(second_id, first_id);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, "encrypted payload one");
+    }
+
+    #[test]
+    fn saving_existing_plain_text_refreshes_instead_of_duplicating() {
+        let storage = memory_storage();
+        let first_id = storage.save_clipboard_item("same text").unwrap();
+
+        let second_id = storage.save_clipboard_item("same text").unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "same text");
     }
 
     #[test]
