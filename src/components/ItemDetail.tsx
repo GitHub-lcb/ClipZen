@@ -41,6 +41,7 @@ export function ItemDetail({
   allTags = [],
 }: ItemDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [content, setContent] = useState(item.content);
   const [editContent, setEditContent] = useState(item.content);
   const [isMasked, setIsMasked] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -121,15 +122,22 @@ export function ItemDetail({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [item, onClose]);
 
+  useEffect(() => {
+    setContent(item.content);
+    setEditContent(item.content);
+    setIsEditing(false);
+    setIsMasked(false);
+  }, [item.id, item.content]);
+
   const sensitiveMatches = useMemo(
-    () => (item.item_type === "text" ? detectSensitive(item.content) : []),
-    [item.content, item.item_type]
+    () => (item.item_type === "text" ? detectSensitive(content) : []),
+    [content, item.item_type]
   );
   const maskedContent = useMemo(
-    () => maskSensitiveContent(item.content, sensitiveMatches),
-    [item.content, sensitiveMatches]
+    () => maskSensitiveContent(content, sensitiveMatches),
+    [content, sensitiveMatches]
   );
-  const displayContent = isMasked ? maskedContent : item.content;
+  const displayContent = isMasked ? maskedContent : content;
   const imageKey = item.file_path ? `${item.id}:${item.file_path}` : "";
   const imageSource =
     loadedImage?.key === imageKey ? loadedImage.data : item.preview || item.content;
@@ -145,14 +153,15 @@ export function ItemDetail({
   };
 
   const handleCopyOriginal = async () => {
-    await invoke("copy_to_clipboard", { content: item.content });
+    await invoke("copy_to_clipboard", { content });
     showCopySuccess();
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      await invoke("update_content", { id: item.id, newContent: editContent });
+      await invoke("update_item_content", { itemId: item.id, content: editContent });
+      setContent(editContent);
       setIsEditing(false);
       onUpdate();
     } catch (error) {
@@ -163,7 +172,7 @@ export function ItemDetail({
   };
 
   const handleCancelEdit = () => {
-    setEditContent(item.content);
+    setEditContent(content);
     setIsEditing(false);
   };
 
