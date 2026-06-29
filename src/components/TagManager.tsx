@@ -13,6 +13,8 @@ interface TagManagerProps {
   allTags?: readonly string[];
 }
 
+const EMPTY_TAG_SUGGESTIONS: readonly string[] = [];
+
 export function TagManager({
   itemId,
   currentTags,
@@ -76,11 +78,12 @@ export function TagManager({
   };
 
   const tagsForSuggestions = providedTags ?? loadedTags;
-  const currentTagSet = useMemo(() => new Set(currentTags), [currentTags]);
-  const availableTags = useMemo(
-    () => tagsForSuggestions.filter(tag => !currentTagSet.has(tag)),
-    [tagsForSuggestions, currentTagSet]
-  );
+  const availableTags = useMemo(() => {
+    if (!showInput) return EMPTY_TAG_SUGGESTIONS;
+
+    const currentTagSet = new Set(currentTags);
+    return tagsForSuggestions.filter(tag => !currentTagSet.has(tag));
+  }, [showInput, tagsForSuggestions, currentTags]);
 
   return (
     <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -145,7 +148,7 @@ export function TagManager({
         )}
       </AnimatePresence>
       
-      {availableTags.length > 0 && (
+      {showInput && availableTags.length > 0 && (
         <div className="w-full mt-2 flex flex-wrap gap-1.5">
           {availableTags.slice(0, 5).map(tag => (
             <motion.button 
@@ -153,6 +156,7 @@ export function TagManager({
               type="button"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => addTag(tag)}
               className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
             >
