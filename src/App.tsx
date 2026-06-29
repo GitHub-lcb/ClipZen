@@ -412,8 +412,9 @@ function App() {
 
   useEffect(() => {
     setStartIndex(0);
-    setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
-  }, [recentItems.length, activeSearchQuery, selectedTag, sortBy, sortOrder]);
+    setEndIndex(MAX_VISIBLE_ITEMS);
+    scrollContainerRef.current?.scrollTo({ top: 0 });
+  }, [activeSearchQuery, selectedTag, sortBy, sortOrder]);
 
   useEffect(() => {
     if (!showSortMenu) return;
