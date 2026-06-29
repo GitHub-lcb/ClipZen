@@ -139,6 +139,13 @@ impl Storage {
         content: &str,
         content_hash: Option<&str>,
     ) -> Result<String> {
+        if let Some(hash) = content_hash {
+            if let Some(existing_id) = self.get_item_id_by_hash(hash)? {
+                self.update_item_timestamp_by_hash(hash)?;
+                return Ok(existing_id);
+            }
+        }
+
         let id = Uuid::new_v4().to_string();
         let preview: String = content.chars().take(100).collect();
         
@@ -504,6 +511,16 @@ impl Storage {
         Ok(count > 0)
     }
 
+    fn get_item_id_by_hash(&self, hash: &str) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT id FROM clipboard_items WHERE content_hash = ?1 LIMIT 1",
+                [hash],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
     /// 更新已存在记录的时间戳（用于去重时提升到顶部）
     pub fn update_item_timestamp_by_hash(&self, hash: &str) -> Result<()> {
         self.conn.execute(
@@ -819,6 +836,23 @@ mod tests {
             .save_clipboard_item_with_hash(&first, Some(&hash))
             .unwrap();
         assert!(storage.hash_exists(&hash).unwrap());
+    }
+
+    #[test]
+    fn saving_existing_content_hash_refreshes_instead_of_duplicating() {
+        let storage = memory_storage();
+        let first_id = storage
+            .save_clipboard_item_with_hash("encrypted payload one", Some("same-hash"))
+            .unwrap();
+
+        let second_id = storage
+            .save_clipboard_item_with_hash("encrypted payload two", Some("same-hash"))
+            .unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "encrypted payload one");
     }
 
     #[test]
