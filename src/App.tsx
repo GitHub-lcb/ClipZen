@@ -102,7 +102,20 @@ function App() {
   const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
   const [searchedQuery, setSearchedQuery] = useState("");
   const [globalTags, setGlobalTags] = useState<string[]>([]);
-  const { items, loading, error, loadingMore, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
+  const {
+    items,
+    loading,
+    error,
+    loadingMore,
+    totalItems,
+    hasMore,
+    loadMore,
+    copyToClipboard,
+    deleteItem,
+    togglePin,
+    refresh,
+    verifyPassword,
+  } = useClipboard();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const activeSearchQuery = searchQuery.trim() ? deferredSearchQuery : searchQuery;
   const isSearching = searchQuery.trim().length > 0;
@@ -305,6 +318,7 @@ function App() {
     return ids;
   }, [enableMaskedCopy, visibleRecentItems]);
   const allFilteredItems = filteredItems;
+  const statusTotalItems = isSearching ? filteredItems.length : totalItems;
 
   const scrollToSelectedItem = useCallback(() => {
     if (selectedIndex < 0 || selectedIndex >= allFilteredItems.length) return;
@@ -1293,7 +1307,8 @@ function App() {
           animate={{ y: 0, opacity: 1 }}
           className="px-4 py-2 text-xs text-center border-t text-muted-foreground"
         >
-          {t('status.total', { n: items.length })} | {t('status.showing', { n: filteredItems.length })}
+          {t('status.total', { n: statusTotalItems })} |{' '}
+          {t('status.showing', { n: filteredItems.length })}
         </motion.div>
         
         <LicenseDialog
