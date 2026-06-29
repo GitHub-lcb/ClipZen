@@ -107,6 +107,16 @@ const staggerContainer = {
   }
 };
 
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+
+  return ref;
+}
+
 function App() {
   const { t, locale, changeLocale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
@@ -406,6 +416,11 @@ function App() {
     showCopiedFeedback(item.id);
   }, [copyToClipboard, showCopiedFeedback]);
 
+  const allFilteredItemsRef = useLatestRef(allFilteredItems);
+  const selectedIndexRef = useLatestRef(selectedIndex);
+  const pinnedItemsLengthRef = useLatestRef(pinnedItems.length);
+  const handleCopyWithFeedbackRef = useLatestRef(handleCopyWithFeedback);
+
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -415,7 +430,7 @@ function App() {
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, allFilteredItems.length - 1));
+        setSelectedIndex(prev => Math.min(prev + 1, allFilteredItemsRef.current.length - 1));
         return;
       }
       if (e.key === 'ArrowUp') {
@@ -425,7 +440,7 @@ function App() {
       }
       if (e.key === 'Home') {
         e.preventDefault();
-        setSelectedIndex(pinnedItems.length);
+        setSelectedIndex(pinnedItemsLengthRef.current);
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -433,7 +448,7 @@ function App() {
       }
       if (e.key === 'End') {
         e.preventDefault();
-        setSelectedIndex(allFilteredItems.length - 1);
+        setSelectedIndex(allFilteredItemsRef.current.length - 1);
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTo({ 
             top: scrollContainerRef.current.scrollHeight, 
@@ -442,15 +457,15 @@ function App() {
         }
         return;
       }
-      if (e.key === 'Enter' && selectedIndex >= 0) {
+      if (e.key === 'Enter' && selectedIndexRef.current >= 0) {
         e.preventDefault();
-        const item = allFilteredItems[selectedIndex];
-        if (item) handleCopyWithFeedback(item);
+        const item = allFilteredItemsRef.current[selectedIndexRef.current];
+        if (item) handleCopyWithFeedbackRef.current(item);
         return;
       }
-      if (e.key === 'Delete' && selectedIndex >= 0) {
+      if (e.key === 'Delete' && selectedIndexRef.current >= 0) {
         e.preventDefault();
-        const item = allFilteredItems[selectedIndex];
+        const item = allFilteredItemsRef.current[selectedIndexRef.current];
         if (item) setDeleteConfirmId(item.id);
         return;
       }
@@ -470,7 +485,12 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [allFilteredItems, selectedIndex, pinnedItems.length, handleCopyWithFeedback]);
+  }, [
+    allFilteredItemsRef,
+    handleCopyWithFeedbackRef,
+    pinnedItemsLengthRef,
+    selectedIndexRef,
+  ]);
 
   const handleDeleteConfirm = async (id: string) => {
     await deleteItem(id);
