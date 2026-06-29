@@ -132,6 +132,7 @@ function App() {
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
   const [searchedQuery, setSearchedQuery] = useState("");
+  const [globalTags, setGlobalTags] = useState<string[]>([]);
   const [, setSearchLoading] = useState(false);
   const { items, loading, error, loadingMore, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -145,6 +146,20 @@ function App() {
   const [endIndex, setEndIndex] = useState(50);
   const ITEM_HEIGHT = 120;
   const MAX_VISIBLE_ITEMS = 50;
+
+  const refreshGlobalTags = useCallback(async () => {
+    try {
+      const tags = await invoke<string[]>("get_all_tags");
+      setGlobalTags(tags);
+    } catch (error) {
+      console.error("Failed to load tags:", error);
+    }
+  }, []);
+
+  const handleDataRefresh = useCallback(() => {
+    void refresh();
+    void refreshGlobalTags();
+  }, [refresh, refreshGlobalTags]);
 
   useEffect(() => {
     const loadFeatureSettings = async () => {
@@ -176,15 +191,16 @@ function App() {
     
     loadFeatureSettings();
     loadLicenseInfo();
-  }, []);
+    void refreshGlobalTags();
+  }, [refreshGlobalTags]);
 
   const allTags = useMemo(() => {
-    const tags = new Set<string>();
+    const tags = new Set(globalTags);
     items.forEach(item => {
       (item.tags || []).forEach(tag => tags.add(tag));
     });
     return Array.from(tags).sort();
-  }, [items]);
+  }, [globalTags, items]);
 
   // 搜索处理
   const handleSearch = useCallback(async (query: string) => {
@@ -353,7 +369,7 @@ function App() {
     const container = scrollContainerRef.current;
     if (!container) return;
 
-    container.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     
     return () => {
@@ -689,7 +705,7 @@ function App() {
             setEnablePasswordProtection(passwordProtection);
             setEnableMaskedCopy(maskedCopy);
           }}
-          onRefresh={refresh}
+          onRefresh={handleDataRefresh}
           onActivateLicense={() => setLicenseDialogOpen(true)}
           isPro={isPro}
           licenseInfo={licenseInfo}
@@ -702,7 +718,7 @@ function App() {
               setDetailItem(null);
               setUnlockedItems(new Set());
             }}
-            onUpdate={refresh}
+            onUpdate={handleDataRefresh}
             t={t}
             enablePasswordProtection={enablePasswordProtection}
             allTags={allTags}
@@ -959,7 +975,7 @@ function App() {
                             <TagManager
                               itemId={item.id}
                               currentTags={item.tags || []}
-                              onTagsChange={() => refresh()}
+                              onTagsChange={handleDataRefresh}
                               t={t}
                               allTags={allTags}
                             />

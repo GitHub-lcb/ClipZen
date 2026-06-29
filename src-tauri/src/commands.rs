@@ -350,19 +350,7 @@ pub fn clear_all_history(
 #[tauri::command]
 pub fn get_all_tags(storage: State<Arc<Mutex<Storage>>>) -> Vec<String> {
     let storage = storage.lock().unwrap();
-    if let Ok(items) = storage.get_all_items() {
-        let mut tags_set = std::collections::HashSet::new();
-        for item in items {
-            for tag in item.tags {
-                tags_set.insert(tag);
-            }
-        }
-        let mut tags: Vec<String> = tags_set.into_iter().collect();
-        tags.sort();
-        tags
-    } else {
-        Vec::new()
-    }
+    storage.get_all_tags().unwrap_or_default()
 }
 
 /// 给记录添加标签

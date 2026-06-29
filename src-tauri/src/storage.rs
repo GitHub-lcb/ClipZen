@@ -4,6 +4,7 @@ use rusqlite::{params, Connection, OptionalExtension, Result, Row};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::Utc;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use dirs::data_dir;
 
@@ -32,10 +33,7 @@ pub struct Storage {
 
 fn clipboard_item_from_row(row: &Row<'_>) -> Result<ClipboardItem> {
     let tags_str: Option<String> = row.get(8)?;
-    let tags: Vec<String> = tags_str
-        .as_deref()
-        .and_then(|value| serde_json::from_str(value).ok())
-        .unwrap_or_default();
+    let tags = parse_tags(tags_str.as_deref());
     let updated_at: Option<i64> = row.get(9).ok();
 
     Ok(ClipboardItem {
@@ -51,6 +49,11 @@ fn clipboard_item_from_row(row: &Row<'_>) -> Result<ClipboardItem> {
         tags,
         copy_count: row.get(10)?,
     })
+}
+
+fn parse_tags(tags: Option<&str>) -> Vec<String> {
+    tags.and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default()
 }
 
 impl Storage {
@@ -280,6 +283,24 @@ impl Storage {
         )?;
 
         stmt.query_row([id], clipboard_item_from_row).optional()
+    }
+
+    pub fn get_all_tags(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT tags FROM clipboard_items WHERE tags IS NOT NULL AND tags != '' AND tags != '[]'"
+        )?;
+        let rows = stmt.query_map([], |row| row.get::<_, Option<String>>(0))?;
+        let mut tags_set = HashSet::new();
+
+        for row in rows {
+            for tag in parse_tags(row?.as_deref()) {
+                tags_set.insert(tag);
+            }
+        }
+
+        let mut tags: Vec<String> = tags_set.into_iter().collect();
+        tags.sort();
+        Ok(tags)
     }
 
     pub fn get_items_paginated(&self, page: u32, page_size: u32) -> Result<(Vec<ClipboardItem>, u32)> {
@@ -733,5 +754,21 @@ mod tests {
 
         let item = storage.get_item_by_id("legacy").unwrap().unwrap();
         assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn gets_all_tags_without_loading_full_items() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES
+             ('a', 'text', 'a', 'a', 0, 0, 1, '', '[\"work\",\"clip\"]'),
+             ('b', 'text', 'b', 'b', 0, 0, 2, '', '[\"clip\",\"later\"]'),
+             ('c', 'text', 'c', 'c', 0, 0, 3, '', NULL),
+             ('d', 'text', 'd', 'd', 0, 0, 4, '', 'not json')",
+            [],
+        ).unwrap();
+
+        assert_eq!(storage.get_all_tags().unwrap(), vec!["clip", "later", "work"]);
     }
 }
