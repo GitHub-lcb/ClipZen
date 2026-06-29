@@ -37,6 +37,8 @@ import { cn } from "@/lib/utils";
 const EMPTY_TAGS: readonly string[] = [];
 const EMPTY_ITEM_IDS: ReadonlySet<string> = new Set();
 
+type ProtectedItemAction = "copy" | "detail" | "preview";
+
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -87,6 +89,7 @@ function App() {
   const [passwordDialogMode, setPasswordDialogMode] = useState<"set" | "verify">("verify");
   const [passwordDialogError, setPasswordDialogError] = useState<string | undefined>();
   const [pendingProtectedItem, setPendingProtectedItem] = useState<ClipboardItem | null>(null);
+  const [pendingProtectedAction, setPendingProtectedAction] = useState<ProtectedItemAction | null>(null);
   const [unlockedItems, setUnlockedItems] = useState<Set<string>>(new Set());
   const [enablePasswordProtection, setEnablePasswordProtection] = useState(false);
   const [enableMaskedCopy, setEnableMaskedCopy] = useState(false);
@@ -413,6 +416,8 @@ function App() {
   const selectedIndexRef = useLatestRef(selectedIndex);
   const pinnedItemsLengthRef = useLatestRef(pinnedItems.length);
   const handleCopyWithFeedbackRef = useLatestRef(handleCopyWithFeedback);
+  const enablePasswordProtectionRef = useLatestRef(enablePasswordProtection);
+  const unlockedItemsRef = useLatestRef(unlockedItems);
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
@@ -461,7 +466,22 @@ function App() {
       if (e.key === 'Enter' && selectedIndexRef.current >= 0) {
         e.preventDefault();
         const item = allFilteredItemsRef.current[selectedIndexRef.current];
-        if (item) handleCopyWithFeedbackRef.current(item);
+        if (item) {
+          const isLockedProtectedItem =
+            enablePasswordProtectionRef.current &&
+            item.protected &&
+            !unlockedItemsRef.current.has(item.id);
+
+          if (isLockedProtectedItem) {
+            setPendingProtectedItem(item);
+            setPendingProtectedAction("copy");
+            setPasswordDialogMode("verify");
+            setPasswordDialogError(undefined);
+            setPasswordDialogOpen(true);
+          } else {
+            handleCopyWithFeedbackRef.current(item);
+          }
+        }
         return;
       }
       if (e.key === 'Delete' && selectedIndexRef.current >= 0) {
@@ -492,6 +512,7 @@ function App() {
         if (passwordDialogOpen) {
           setPasswordDialogOpen(false);
           setPendingProtectedItem(null);
+          setPendingProtectedAction(null);
           setPasswordDialogError(undefined);
         }
         if (licenseDialogOpen) {
@@ -516,6 +537,7 @@ function App() {
     allFilteredItemsRef,
     deleteConfirmId,
     detailItem,
+    enablePasswordProtectionRef,
     handleCopyWithFeedbackRef,
     licenseDialogOpen,
     passwordDialogOpen,
@@ -523,6 +545,7 @@ function App() {
     previewImage,
     selectedIndexRef,
     settingsOpen,
+    unlockedItemsRef,
   ]);
 
   const handleDeleteConfirm = async (id: string) => {
@@ -562,14 +585,25 @@ function App() {
     }
   };
 
-  const handleProtectedItemClick = (item: ClipboardItem) => {
-    if (unlockedItems.has(item.id)) {
-      handleCopyWithFeedback(item);
-    } else {
+  const runUnlockedItemAction = (item: ClipboardItem, action: ProtectedItemAction) => {
+    if (action === "copy") {
+      void handleCopyWithFeedback(item);
+    } else if (action === "detail") {
+      setDetailItem(item);
+    } else if (action === "preview") {
+      void handleImagePreview(item);
+    }
+  };
+
+  const handleProtectedItemAction = (item: ClipboardItem, action: ProtectedItemAction) => {
+    if (enablePasswordProtection && item.protected && !unlockedItems.has(item.id)) {
       setPendingProtectedItem(item);
+      setPendingProtectedAction(action);
       setPasswordDialogMode("verify");
       setPasswordDialogError(undefined);
       setPasswordDialogOpen(true);
+    } else {
+      runUnlockedItemAction(item, action);
     }
   };
 
@@ -579,8 +613,11 @@ function App() {
       setPasswordDialogOpen(false);
       if (pendingProtectedItem) {
         setUnlockedItems(prev => new Set(prev).add(pendingProtectedItem.id));
-        handleCopyWithFeedback(pendingProtectedItem);
+        if (pendingProtectedAction) {
+          runUnlockedItemAction(pendingProtectedItem, pendingProtectedAction);
+        }
         setPendingProtectedItem(null);
+        setPendingProtectedAction(null);
       }
     } else {
       setPasswordDialogError(t('password.incorrect'));
@@ -590,6 +627,7 @@ function App() {
   const handlePasswordCancel = () => {
     setPasswordDialogOpen(false);
     setPendingProtectedItem(null);
+    setPendingProtectedAction(null);
     setPasswordDialogError(undefined);
   };
 
@@ -804,6 +842,7 @@ function App() {
             t={t}
             locale={locale}
             enablePasswordProtection={enablePasswordProtection}
+            initialUnlocked={unlockedItems.has(detailItem.id)}
             allTags={allTags}
           />
         )}
@@ -850,7 +889,7 @@ function App() {
                       ref={(el) => setItemRef(item.id, el)}
                       onClick={() => {
                         if (enablePasswordProtection && item.protected) {
-                          handleProtectedItemClick(item);
+                          handleProtectedItemAction(item, "copy");
                         } else {
                           handleCopyWithFeedback(item);
                         }
@@ -1013,7 +1052,7 @@ function App() {
                     ref={(el) => setItemRef(item.id, el)}
                     onClick={() => {
                       if (enablePasswordProtection && item.protected) {
-                        handleProtectedItemClick(item);
+                        handleProtectedItemAction(item, "copy");
                       } else {
                         handleCopyWithFeedback(item);
                       }
@@ -1094,7 +1133,10 @@ function App() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={(e) => { e.stopPropagation(); handleImagePreview(item); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleProtectedItemAction(item, "preview");
+                                  }}
                                   aria-label={t('image.preview')}
                                 >
                                   <ImageIcon className="w-4 h-4" />
@@ -1109,7 +1151,10 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={(e) => { e.stopPropagation(); handleCopyWithFeedback(item); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProtectedItemAction(item, "copy");
+                                }}
                                 aria-label={t('actions.copy')}
                               >
                                 <Clipboard className="w-4 h-4" />
@@ -1140,7 +1185,10 @@ function App() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={(e) => { e.stopPropagation(); setDetailItem(item); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProtectedItemAction(item, "detail");
+                                }}
                                 aria-label={t('detail.title')}
                               >
                                 <Info className="w-4 h-4" />

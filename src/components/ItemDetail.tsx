@@ -31,6 +31,7 @@ interface ItemDetailProps {
   t: (key: string, params?: Record<string, string | number>) => string;
   locale: string;
   enablePasswordProtection?: boolean;
+  initialUnlocked?: boolean;
   allTags?: string[];
 }
 
@@ -38,6 +39,7 @@ export function ItemDetail({
   item, onClose, onUpdate, t, 
   locale,
   enablePasswordProtection = false,
+  initialUnlocked = false,
   allTags = [],
 }: ItemDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -47,7 +49,7 @@ export function ItemDetail({
   const [saving, setSaving] = useState(false);
   const [tags, setTags] = useState<string[]>(item.tags || []);
   const [isProtected, setIsProtected] = useState(item.protected || false);
-  const [showProtectedContent, setShowProtectedContent] = useState(false);
+  const [showProtectedContent, setShowProtectedContent] = useState(initialUnlocked);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordDialogMode, setPasswordDialogMode] = useState<"set" | "verify">("set");
   const [passwordDialogError, setPasswordDialogError] = useState("");
@@ -129,30 +131,47 @@ export function ItemDetail({
     setIsMasked(false);
   }, [item.id, item.content]);
 
+  const contentLocked = enablePasswordProtection && isProtected && !showProtectedContent;
   const sensitiveMatches = useMemo(
-    () => (item.item_type === "text" ? detectSensitive(content) : []),
-    [content, item.item_type]
+    () => (contentLocked || item.item_type !== "text" ? [] : detectSensitive(content)),
+    [content, contentLocked, item.item_type]
   );
   const maskedContent = useMemo(
     () => maskSensitiveContent(content, sensitiveMatches),
     [content, sensitiveMatches]
   );
-  const displayContent = isMasked ? maskedContent : content;
+  const displayContent = contentLocked ? "****" : isMasked ? maskedContent : content;
   const imageKey = item.file_path ? `${item.id}:${item.file_path}` : "";
   const imageSource =
     loadedImage?.key === imageKey ? loadedImage.data : item.preview || item.content;
 
   useEffect(() => {
     setIsProtected(item.protected || false);
-    setShowProtectedContent(false);
-  }, [item.id, item.content, item.protected]);
+    setShowProtectedContent(initialUnlocked);
+  }, [initialUnlocked, item.id, item.content, item.protected]);
 
   const handleCopyMasked = async () => {
+    if (contentLocked) {
+      setPendingAction("show");
+      setPasswordDialogMode("verify");
+      setPasswordDialogError("");
+      setPasswordDialogOpen(true);
+      return;
+    }
+
     await invoke("copy_masked_content", { content: maskedContent });
     showCopySuccess();
   };
 
   const handleCopyOriginal = async () => {
+    if (contentLocked) {
+      setPendingAction("show");
+      setPasswordDialogMode("verify");
+      setPasswordDialogError("");
+      setPasswordDialogOpen(true);
+      return;
+    }
+
     await invoke("copy_to_clipboard", { content });
     showCopySuccess();
   };
@@ -180,6 +199,13 @@ export function ItemDetail({
     await invoke("toggle_protected", { id: item.id });
     setIsProtected(!isProtected);
     onUpdate();
+  };
+
+  const handleShowProtectedContent = () => {
+    setPendingAction("show");
+    setPasswordDialogMode("verify");
+    setPasswordDialogError("");
+    setPasswordDialogOpen(true);
   };
 
   const handlePasswordConfirm = async (password: string) => {
@@ -280,11 +306,24 @@ export function ItemDetail({
                 transition={{ delay: 0.1 }}
               >
                 <Card className="overflow-hidden">
-                  <img 
-                    src={imageSource}
-                    alt={t('image.preview')}
-                    className="w-full max-h-64 object-contain"
-                  />
+                  {contentLocked ? (
+                    <div className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center">
+                      <Lock className="w-6 h-6 text-amber-500" />
+                      <p className="text-sm text-muted-foreground">
+                        {t('detail.protectedContent')}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={handleShowProtectedContent}>
+                        <Eye className="w-3.5 h-3.5 mr-1.5" />
+                        {t('detail.showContent')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <img
+                      src={imageSource}
+                      alt={t('image.preview')}
+                      className="w-full max-h-64 object-contain"
+                    />
+                  )}
                 </Card>
               </motion.div>
             )}
@@ -298,7 +337,7 @@ export function ItemDetail({
               >
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium">{t('detail.content')}</h3>
-                  {!isEditing && (
+                  {!isEditing && !contentLocked && (
                     <div className="flex items-center gap-1">
                       {sensitiveMatches.length > 0 && (
                         <Button 
@@ -336,10 +375,16 @@ export function ItemDetail({
                     </div>
                   </div>
                 ) : (
-                  <Card className="p-3">
+                  <Card className="p-3 space-y-3">
                     <p className="text-sm whitespace-pre-wrap break-all">
-                      {isProtected && !showProtectedContent ? "****" : displayContent}
+                      {displayContent}
                     </p>
+                    {contentLocked && (
+                      <Button variant="outline" size="sm" onClick={handleShowProtectedContent}>
+                        <Eye className="w-3.5 h-3.5 mr-1.5" />
+                        {t('detail.showContent')}
+                      </Button>
+                    )}
                   </Card>
                 )}
               </motion.div>
@@ -371,7 +416,7 @@ export function ItemDetail({
             )}
 
             {/* Copy Options */}
-            {!isEditing && item.item_type === "text" && (
+            {!isEditing && item.item_type === "text" && !contentLocked && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -430,7 +475,10 @@ export function ItemDetail({
                     size="sm"
                     onClick={async () => {
                       if (isProtected) {
-                        await handleToggleProtected();
+                        setPendingAction("toggle");
+                        setPasswordDialogMode("verify");
+                        setPasswordDialogError("");
+                        setPasswordDialogOpen(true);
                       } else if (hasGlobalPwd) {
                         await handleToggleProtected();
                       } else {
