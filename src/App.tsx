@@ -92,6 +92,16 @@ function hasSensitiveInfo(content: string): boolean {
   return detectSensitive(content).length > 0;
 }
 
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+
+  return (
+    target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
+    null
+  );
+}
+
 // 动画配置
 const fadeInUp = {
   initial: { opacity: 0, y: 10 },
@@ -449,6 +459,9 @@ function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+      if (isEditableShortcutTarget(e.target)) {
         return;
       }
       if (e.key === 'ArrowDown') {
