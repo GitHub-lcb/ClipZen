@@ -11,6 +11,10 @@ use dirs::data_dir;
 // 加密相关导入
 use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm, Nonce};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ClipboardItem {
@@ -127,22 +131,31 @@ impl Storage {
 
     /// 保存文本剪贴板
     pub fn save_clipboard_item(&self, content: &str) -> Result<String> {
+        self.save_clipboard_item_with_hash(content, None)
+    }
+
+    pub fn save_clipboard_item_with_hash(
+        &self,
+        content: &str,
+        content_hash: Option<&str>,
+    ) -> Result<String> {
         let id = Uuid::new_v4().to_string();
-        let preview = content.chars().take(100).collect();
+        let preview: String = content.chars().take(100).collect();
         
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            [
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
                 &id,
-                &"text".to_string(),
-                &content.to_string(),
+                "text",
+                content,
                 &preview,
-                &0.to_string(),
-                &0.to_string(),
-                &Utc::now().timestamp_millis().to_string(),
-                &"".to_string(),
-                &"[]".to_string(),
+                0,
+                0,
+                Utc::now().timestamp_millis(),
+                "",
+                "[]",
+                content_hash,
             ],
         )?;
         Ok(id)
@@ -545,6 +558,38 @@ pub fn contains_sensitive_info(content: &str) -> bool {
         || contains_bank_card(content)
 }
 
+pub fn protect_sensitive_content(content: &str, encryption_key: Option<&str>) -> String {
+    if !contains_sensitive_info(content) {
+        return content.to_string();
+    }
+
+    let Some(encryption_key_str) = encryption_key else {
+        return content.to_string();
+    };
+    let Ok(encryption_key) = STANDARD.decode(encryption_key_str) else {
+        return content.to_string();
+    };
+    let Ok(encrypted) = encrypt_data(content, &encryption_key) else {
+        return content.to_string();
+    };
+
+    format!("ENCRYPTED:{}", encrypted)
+}
+
+pub fn sensitive_content_hash(content: &str, encryption_key: Option<&str>) -> Option<String> {
+    if !contains_sensitive_info(content) {
+        return None;
+    }
+
+    let encryption_key_str = encryption_key?;
+    let encryption_key = STANDARD.decode(encryption_key_str).ok()?;
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(&encryption_key).ok()?;
+    mac.update(content.as_bytes());
+    let result = mac.finalize().into_bytes();
+
+    Some(format!("sensitive:{:x}", result))
+}
+
 fn contains_phone_number(content: &str) -> bool {
     content.as_bytes().windows(11).any(|window| {
         window[0] == b'1'
@@ -685,8 +730,10 @@ pub fn decrypt_data(encrypted: &str, key: &[u8]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key, Storage,
+        contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key,
+        protect_sensitive_content, sensitive_content_hash, Storage,
     };
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use rusqlite::{params, Connection};
 
     fn memory_storage() -> Storage {
@@ -715,6 +762,36 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(decrypt_data(&first, &key).unwrap(), "secret");
         assert_eq!(decrypt_data(&second, &key).unwrap(), "secret");
+    }
+
+    #[test]
+    fn protect_sensitive_content_encrypts_with_configured_key() {
+        let key = generate_encryption_key();
+        let encoded_key = STANDARD.encode(&key);
+
+        let protected = protect_sensitive_content("contact user@example.com", Some(&encoded_key));
+
+        assert!(protected.starts_with("ENCRYPTED:"));
+        let encrypted = protected.trim_start_matches("ENCRYPTED:");
+        assert_eq!(decrypt_data(encrypted, &key).unwrap(), "contact user@example.com");
+    }
+
+    #[test]
+    fn sensitive_content_hash_dedupes_randomized_encryption() {
+        let storage = memory_storage();
+        let key = generate_encryption_key();
+        let encoded_key = STANDARD.encode(&key);
+        let content = "contact user@example.com";
+
+        let first = protect_sensitive_content(content, Some(&encoded_key));
+        let second = protect_sensitive_content(content, Some(&encoded_key));
+        let hash = sensitive_content_hash(content, Some(&encoded_key)).unwrap();
+
+        assert_ne!(first, second);
+        storage
+            .save_clipboard_item_with_hash(&first, Some(&hash))
+            .unwrap();
+        assert!(storage.hash_exists(&hash).unwrap());
     }
 
     #[test]

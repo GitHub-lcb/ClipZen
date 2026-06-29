@@ -150,13 +150,32 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
         
         match content {
             crate::clipboard::ClipboardContent::Text(text) => {
+                let app_settings = settings.load();
+                let processed_text = crate::storage::protect_sensitive_content(
+                    &text,
+                    app_settings.encryption_key.as_deref(),
+                );
+                let content_hash = crate::storage::sensitive_content_hash(
+                    &text,
+                    app_settings.encryption_key.as_deref(),
+                );
+                let content_exists = if let Some(hash) = content_hash.as_deref() {
+                    storage.hash_exists(hash).unwrap_or(false)
+                } else {
+                    storage.content_exists(&text).unwrap_or(false)
+                };
+
                 if text != last_text 
                     && !text.trim().is_empty()
-                    && !storage.content_exists(&text).unwrap_or(false) 
+                    && !content_exists
                 {
                     last_text = text.clone();
-                    let _ = storage.save_clipboard_item(&text);
-                    let max_items = settings.load().max_history_items;
+                    if let Some(hash) = content_hash.as_deref() {
+                        let _ = storage.save_clipboard_item_with_hash(&processed_text, Some(hash));
+                    } else {
+                        let _ = storage.save_clipboard_item(&processed_text);
+                    }
+                    let max_items = app_settings.max_history_items;
                     let _ = storage.cleanup_old_items(max_items);
                     let _ = handle.emit("clipboard-updated", ());
                 }

@@ -102,21 +102,19 @@ pub fn save_to_history(
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    let should_encrypt = crate::storage::contains_sensitive_info(&content);
-    let mut processed_content = content;
+    let processed_content =
+        crate::storage::protect_sensitive_content(&content, app_settings.encryption_key.as_deref());
+    let content_hash =
+        crate::storage::sensitive_content_hash(&content, app_settings.encryption_key.as_deref());
     
     // 检测并加密敏感信息
-    if should_encrypt {
-        if let Some(encryption_key_str) = &app_settings.encryption_key {
-            if let Ok(encryption_key) = STANDARD.decode(encryption_key_str) {
-                if let Ok(encrypted) = crate::storage::encrypt_data(&processed_content, &encryption_key) {
-                    processed_content = format!("ENCRYPTED:{}", encrypted);
-                }
-            }
-        }
+    if let Some(hash) = content_hash.as_deref() {
+        storage
+            .save_clipboard_item_with_hash(&processed_content, Some(hash))
+            .unwrap_or_default()
+    } else {
+        storage.save_clipboard_item(&processed_content).unwrap_or_default()
     }
-    
-    storage.save_clipboard_item(&processed_content).unwrap_or_default()
 }
 
 #[tauri::command]
@@ -168,6 +166,7 @@ pub fn copy_masked_content(content: String, clipboard: State<Arc<Mutex<Clipboard
 pub fn get_current_clipboard_content(
     clipboard: State<Arc<Mutex<ClipboardManager>>>,
     storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
 ) -> String {
     let clipboard = clipboard.lock().unwrap();
     let content = clipboard.get_content();
@@ -175,8 +174,25 @@ pub fn get_current_clipboard_content(
     match content {
         ClipboardContent::Text(text) => {
             // 保存文本
+            let settings_manager = settings.lock().unwrap();
+            let app_settings = settings_manager.load();
+            drop(settings_manager);
+            let processed_text = crate::storage::protect_sensitive_content(
+                &text,
+                app_settings.encryption_key.as_deref(),
+            );
+            let content_hash = crate::storage::sensitive_content_hash(
+                &text,
+                app_settings.encryption_key.as_deref(),
+            );
             let storage = storage.lock().unwrap();
-            storage.save_clipboard_item(&text).ok();
+            if let Some(hash) = content_hash.as_deref() {
+                storage
+                    .save_clipboard_item_with_hash(&processed_text, Some(hash))
+                    .ok();
+            } else {
+                storage.save_clipboard_item(&processed_text).ok();
+            }
             format!("text:{}", text)
         }
         ClipboardContent::Image(image_data) => {
