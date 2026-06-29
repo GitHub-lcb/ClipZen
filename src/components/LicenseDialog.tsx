@@ -40,6 +40,20 @@ export function LicenseDialog({ isOpen, onClose, onActivated, t }: LicenseDialog
     };
   }, []);
 
+  useEffect(() => {
+    if (isOpen) return;
+
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    setCode('');
+    setIsLoading(false);
+    setError('');
+    setSuccess(false);
+    setLicenseInfo(null);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const formatCode = (value: string) => {
