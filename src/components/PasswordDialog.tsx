@@ -141,6 +141,9 @@ export function PasswordDialog({
                     size="icon"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={t(
+                      showPassword ? "password.hidePassword" : "password.showPassword"
+                    )}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -174,6 +177,11 @@ export function PasswordDialog({
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={t(
+                        showConfirmPassword
+                          ? "password.hideConfirmPassword"
+                          : "password.showConfirmPassword"
+                      )}
                     >
                       {showConfirmPassword ? (
                         <EyeOff className="w-4 h-4" />

@@ -236,7 +236,12 @@ export function SettingsPanel({
                 </div>
                 <h2 className="text-base font-semibold">{t('settings.title')}</h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                aria-label={t('actions.cancel')}
+              >
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -339,6 +344,13 @@ export function SettingsPanel({
                           size="sm"
                           className="flex-1"
                           onClick={() => setSettings({ ...settings, theme: value })}
+                          aria-label={t(
+                            value === 'system'
+                              ? 'settings.themeSystem'
+                              : value === 'light'
+                                ? 'settings.themeLight'
+                                : 'settings.themeDark'
+                          )}
                         >
                           <Icon className="w-3.5 h-3.5" />
                         </Button>

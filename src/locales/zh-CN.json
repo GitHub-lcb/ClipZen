@@ -191,6 +191,10 @@
     "verifyTitle": "验证密码",
     "setHint": "请设置一个密码来保护敏感内容",
     "password": "密码",
-    "placeholder": "请输入密码"
+    "placeholder": "请输入密码",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码",
+    "showConfirmPassword": "显示确认密码",
+    "hideConfirmPassword": "隐藏确认密码"
   }
 }

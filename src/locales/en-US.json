@@ -191,6 +191,10 @@
     "verifyTitle": "Verify Password",
     "setHint": "Please set a password to protect sensitive content",
     "password": "Password",
-    "placeholder": "Enter password"
+    "placeholder": "Enter password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "showConfirmPassword": "Show confirm password",
+    "hideConfirmPassword": "Hide confirm password"
   }
 }
