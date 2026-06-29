@@ -221,6 +221,17 @@ impl Storage {
 
     /// 保存图片剪贴板
     pub fn save_image_item(&self, _image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
+        if let Some(existing_id) = self.get_item_id_by_hash(content_hash)? {
+            self.update_item_timestamp_by_hash(content_hash)?;
+            let existing_path = self
+                .get_item_by_id(&existing_id)?
+                .and_then(|item| item.file_path);
+            if existing_path.as_deref() != Some(file_path) {
+                std::fs::remove_file(file_path).ok();
+            }
+            return Ok(existing_id);
+        }
+
         let id = Uuid::new_v4().to_string();
         
         self.conn.execute(
@@ -964,6 +975,60 @@ mod tests {
 
         assert_eq!(storage.cleanup_old_items(u32::MAX).unwrap(), 0);
         assert_eq!(storage.get_all_items().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn saving_existing_image_hash_refreshes_and_removes_duplicate_file() {
+        let storage = memory_storage();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "clipzen-image-dedupe-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let first_path = temp_dir.join("first.png");
+        let duplicate_path = temp_dir.join("duplicate.png");
+        std::fs::write(&first_path, b"first").unwrap();
+        std::fs::write(&duplicate_path, b"duplicate").unwrap();
+
+        let first_id = storage
+            .save_image_item(&[1], "preview one", first_path.to_str().unwrap(), "image-hash")
+            .unwrap();
+        let second_id = storage
+            .save_image_item(&[2], "preview two", duplicate_path.to_str().unwrap(), "image-hash")
+            .unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].file_path.as_deref(), first_path.to_str());
+        assert!(first_path.exists());
+        assert!(!duplicate_path.exists());
+        std::fs::remove_file(&first_path).ok();
+        std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn saving_existing_image_hash_keeps_file_when_path_matches_existing_item() {
+        let storage = memory_storage();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "clipzen-image-dedupe-same-path-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let image_path = temp_dir.join("image.png");
+        std::fs::write(&image_path, b"image").unwrap();
+
+        let first_id = storage
+            .save_image_item(&[1], "preview one", image_path.to_str().unwrap(), "image-hash")
+            .unwrap();
+        let second_id = storage
+            .save_image_item(&[1], "preview two", image_path.to_str().unwrap(), "image-hash")
+            .unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert!(image_path.exists());
+        std::fs::remove_file(&image_path).ok();
+        std::fs::remove_dir(&temp_dir).ok();
     }
 
     #[test]
