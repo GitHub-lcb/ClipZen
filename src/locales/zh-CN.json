@@ -25,7 +25,8 @@
   "recent": {
     "title": "最近记录",
     "empty": "暂无记录",
-    "emptyHint": "复制内容后会自动记录在这里"
+    "emptyHint": "复制内容后会自动记录在这里",
+    "loadFailed": "加载剪贴板历史失败，请重试。"
   },
   "time": {
     "justNow": "刚刚",

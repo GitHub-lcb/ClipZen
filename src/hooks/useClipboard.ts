@@ -80,7 +80,7 @@ export function useClipboard() {
       }
       console.error("Failed to load clipboard history:", error);
       // 添加错误状态
-      setError("Failed to load clipboard history. Please try again.");
+      setError("recent.loadFailed");
       // 3秒后清除错误
       if (errorTimeoutRef.current !== null) {
         window.clearTimeout(errorTimeoutRef.current);

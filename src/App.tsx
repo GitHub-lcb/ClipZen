@@ -836,7 +836,7 @@ function App() {
               exit={{ opacity: 0, y: -10 }}
               className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-600 text-sm"
             >
-              {error}
+              {t(error)}
             </motion.div>
           )}
         </AnimatePresence>

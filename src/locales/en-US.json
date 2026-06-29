@@ -25,7 +25,8 @@
   "recent": {
     "title": "Recent",
     "empty": "No records",
-    "emptyHint": "Copy something and it will appear here"
+    "emptyHint": "Copy something and it will appear here",
+    "loadFailed": "Failed to load clipboard history. Please try again."
   },
   "time": {
     "justNow": "Just now",
