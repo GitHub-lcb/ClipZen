@@ -74,6 +74,23 @@ fn decrypt_sensitive_items(items: &mut Vec<crate::storage::ClipboardItem>, setti
     }
 }
 
+fn filter_items_for_search(
+    mut items: Vec<crate::storage::ClipboardItem>,
+    query: &str,
+    settings: &AppSettings,
+) -> Vec<crate::storage::ClipboardItem> {
+    decrypt_sensitive_items(&mut items, settings);
+
+    let query_lower = query.to_lowercase();
+    items.into_iter()
+        .filter(|item| {
+            item.content.to_lowercase().contains(&query_lower)
+                || item.preview.to_lowercase().contains(&query_lower)
+                || item.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -423,17 +440,7 @@ pub fn search_clipboard_history(
     let app_settings = settings_manager.load();
     
     if let Ok(items) = storage.get_all_items() {
-        let query_lower = query.to_lowercase();
-        let mut filtered_items: Vec<_> = items.into_iter()
-            .filter(|item| {
-                item.content.to_lowercase().contains(&query_lower)
-                    || item.preview.to_lowercase().contains(&query_lower)
-                    || item.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
-            })
-            .collect();
-        
-        decrypt_sensitive_items(&mut filtered_items, &app_settings);
-        filtered_items
+        filter_items_for_search(items, &query, &app_settings)
     } else {
         Vec::new()
     }
@@ -577,4 +584,50 @@ pub fn generate_license_codes(
     };
     
     Ok(generate_batch_license_codes(count as usize, ltype, device_slots))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::{encrypt_data, generate_encryption_key, ClipboardItem};
+
+    fn settings_with_key(key: &[u8]) -> AppSettings {
+        AppSettings {
+            encryption_key: Some(STANDARD.encode(key)),
+            ..AppSettings::default()
+        }
+    }
+
+    fn text_item(id: &str, content: String, preview: String) -> ClipboardItem {
+        ClipboardItem {
+            id: id.to_string(),
+            item_type: "text".to_string(),
+            content,
+            preview,
+            pinned: false,
+            protected: false,
+            created_at: 1,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        }
+    }
+
+    #[test]
+    fn search_matches_decrypted_sensitive_content() {
+        let key = generate_encryption_key();
+        let encrypted = encrypt_data("secret-user@example.com", &key).unwrap();
+        let settings = settings_with_key(&key);
+        let items = vec![text_item(
+            "encrypted",
+            format!("ENCRYPTED:{}", encrypted),
+            "ENCRYPTED".to_string(),
+        )];
+
+        let results = filter_items_for_search(items, "secret-user@example.com", &settings);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].content, "secret-user@example.com");
+    }
 }
