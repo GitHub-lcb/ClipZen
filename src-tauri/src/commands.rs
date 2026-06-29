@@ -267,6 +267,9 @@ pub fn get_settings(settings: State<Arc<Mutex<SettingsManager>>>) -> AppSettings
     settings.load()
 }
 
+const MIN_HISTORY_ITEMS: u32 = 100;
+const MAX_HISTORY_ITEMS: u32 = 10_000;
+
 fn merge_settings_for_save(
     mut new_settings: AppSettings,
     existing_settings: &AppSettings,
@@ -277,6 +280,9 @@ fn merge_settings_for_save(
     if new_settings.encryption_key.is_none() {
         new_settings.encryption_key = existing_settings.encryption_key.clone();
     }
+    new_settings.max_history_items = new_settings
+        .max_history_items
+        .clamp(MIN_HISTORY_ITEMS, MAX_HISTORY_ITEMS);
     new_settings
 }
 
@@ -706,5 +712,27 @@ mod tests {
         assert_eq!(merged.theme, "dark");
         assert_eq!(merged.global_password, Some("password-hash".to_string()));
         assert_eq!(merged.encryption_key, Some("encryption-key".to_string()));
+    }
+
+    #[test]
+    fn save_settings_clamps_history_limit_before_persisting() {
+        let existing = AppSettings::default();
+        let too_low = AppSettings {
+            max_history_items: 1,
+            ..AppSettings::default()
+        };
+        let too_high = AppSettings {
+            max_history_items: 50_000,
+            ..AppSettings::default()
+        };
+
+        assert_eq!(
+            merge_settings_for_save(too_low, &existing).max_history_items,
+            100
+        );
+        assert_eq!(
+            merge_settings_for_save(too_high, &existing).max_history_items,
+            10_000
+        );
     }
 }
