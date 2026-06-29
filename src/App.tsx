@@ -40,6 +40,8 @@ const SENSITIVE_PATTERNS = [
   { pattern: /\b\d{16,19}\b/g, type: "bankcard" },
 ];
 
+const EMPTY_TAGS: readonly string[] = [];
+
 interface SensitiveMatch {
   type: string;
   original: string;
@@ -212,7 +214,7 @@ function App() {
   const allTags = useMemo(() => {
     const tags = new Set(globalTags);
     items.forEach(item => {
-      (item.tags || []).forEach(tag => tags.add(tag));
+      (item.tags ?? EMPTY_TAGS).forEach(tag => tags.add(tag));
     });
     return Array.from(tags).sort();
   }, [globalTags, items]);
@@ -264,7 +266,7 @@ function App() {
     }
 
     if (selectedTag) {
-      result = result.filter(item => (item.tags || []).includes(selectedTag));
+      result = result.filter(item => (item.tags ?? EMPTY_TAGS).includes(selectedTag));
     }
     
     const sorted = [...result].sort((a, b) => {
@@ -1053,7 +1055,7 @@ function App() {
                           <div className="mt-3">
                             <TagManager
                               itemId={item.id}
-                              currentTags={item.tags || []}
+                              currentTags={item.tags ?? EMPTY_TAGS}
                               onTagsChange={handleDataRefresh}
                               t={t}
                               allTags={allTags}

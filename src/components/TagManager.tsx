@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input";
 
 interface TagManagerProps {
   itemId: string;
-  currentTags: string[];
+  currentTags: readonly string[];
   onTagsChange: (tags: string[]) => void;
   t: (key: string) => string;
-  allTags?: string[];
+  allTags?: readonly string[];
 }
 
 export function TagManager({
