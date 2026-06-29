@@ -511,10 +511,36 @@ function App() {
         return;
       }
       if (e.key === 'Escape') {
+        const hasTransientUi =
+          deleteConfirmId !== null ||
+          previewImage !== null ||
+          detailItem !== null ||
+          settingsOpen ||
+          passwordDialogOpen ||
+          licenseDialogOpen;
+
         setDeleteConfirmId(null);
         setPreviewImage(null);
-        setDetailItem(null);
         setSelectedIndex(-1);
+        if (detailItem !== null) {
+          setDetailItem(null);
+          setUnlockedItems(new Set());
+        }
+        if (settingsOpen) {
+          setSettingsOpen(false);
+        }
+        if (passwordDialogOpen) {
+          setPasswordDialogOpen(false);
+          setPendingProtectedItem(null);
+          setPasswordDialogError(undefined);
+        }
+        if (licenseDialogOpen) {
+          setLicenseDialogOpen(false);
+        }
+        if (hasTransientUi) {
+          return;
+        }
+
         try {
           const { getCurrentWindow } = await import("@tauri-apps/api/window");
           await getCurrentWindow().minimize();
@@ -528,9 +554,15 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     allFilteredItemsRef,
+    deleteConfirmId,
+    detailItem,
     handleCopyWithFeedbackRef,
+    licenseDialogOpen,
+    passwordDialogOpen,
     pinnedItemsLengthRef,
+    previewImage,
     selectedIndexRef,
+    settingsOpen,
   ]);
 
   const handleDeleteConfirm = async (id: string) => {
