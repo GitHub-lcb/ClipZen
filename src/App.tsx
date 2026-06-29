@@ -285,7 +285,7 @@ function App() {
         case "content": {
           const aContent = a.item_type === "image" ? "" : (a.preview || a.content).toLowerCase();
           const bContent = b.item_type === "image" ? "" : (b.preview || b.content).toLowerCase();
-          return aContent.localeCompare(bContent, "zh-CN") * multiplier;
+          return aContent.localeCompare(bContent, locale) * multiplier;
         }
         case "popularity": {
           const aLastCopy = a.updated_at || a.created_at;
@@ -303,7 +303,7 @@ function App() {
     });
     
     return sorted;
-  }, [items, searchedItems, searchedQuery, selectedTag, activeSearchQuery, sortBy, sortOrder]);
+  }, [items, searchedItems, searchedQuery, selectedTag, activeSearchQuery, sortBy, sortOrder, locale]);
 
   const { pinnedItems, recentItems } = useMemo(() => {
     const pinned: ClipboardItem[] = [];
@@ -755,6 +755,7 @@ function App() {
             }}
             onUpdate={handleDataRefresh}
             t={t}
+            locale={locale}
             enablePasswordProtection={enablePasswordProtection}
             allTags={allTags}
           />

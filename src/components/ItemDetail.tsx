@@ -25,6 +25,7 @@ interface ItemDetailProps {
   onClose: () => void;
   onUpdate: () => void;
   t: (key: string, params?: Record<string, string | number>) => string;
+  locale: string;
   enablePasswordProtection?: boolean;
   allTags?: string[];
 }
@@ -78,6 +79,7 @@ function detectSensitive(content: string): SensitiveMatch[] {
 
 export function ItemDetail({ 
   item, onClose, onUpdate, t, 
+  locale,
   enablePasswordProtection = false,
   allTags = [],
 }: ItemDetailProps) {
@@ -228,7 +230,7 @@ export function ItemDetail({
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
+    return date.toLocaleString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
