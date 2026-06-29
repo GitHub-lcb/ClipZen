@@ -519,8 +519,8 @@ impl Storage {
             item.tags.push(tag.to_string());
             let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
             self.conn.execute(
-                "UPDATE clipboard_items SET tags = ?1 WHERE id = ?2",
-                params![tags_json, id],
+                "UPDATE clipboard_items SET tags = ?1, updated_at = ?2 WHERE id = ?3",
+                params![tags_json, Utc::now().timestamp_millis(), id],
             )?;
         }
 
@@ -537,8 +537,8 @@ impl Storage {
         if item.tags.len() != original_len {
             let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
             self.conn.execute(
-                "UPDATE clipboard_items SET tags = ?1 WHERE id = ?2",
-                params![tags_json, id],
+                "UPDATE clipboard_items SET tags = ?1, updated_at = ?2 WHERE id = ?3",
+                params![tags_json, Utc::now().timestamp_millis(), id],
             )?;
         }
 
@@ -1036,6 +1036,37 @@ mod tests {
         storage.remove_tag_from_item(&id, "work").unwrap();
         let item = storage.get_item_by_id(&id).unwrap().unwrap();
         assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn adding_tag_refreshes_updated_at() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("tag me").unwrap();
+
+        storage.add_tag_to_item(&id, "work").unwrap();
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert_eq!(item.tags, vec!["work"]);
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn removing_tag_refreshes_updated_at() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('tagged', 'text', 'tagged content', 'tagged content', 0, 0, 1000, '', '[\"work\"]')",
+            [],
+        ).unwrap();
+
+        storage.remove_tag_from_item("tagged", "work").unwrap();
+
+        let item = storage.get_item_by_id("tagged").unwrap().unwrap();
+        assert!(item.tags.is_empty());
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
     }
 
     #[test]
