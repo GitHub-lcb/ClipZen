@@ -602,12 +602,15 @@ impl Storage {
         }
 
         let preview: String = content.chars().take(100).collect();
-        self.conn.execute(
+        let updated = self.conn.execute(
             "UPDATE clipboard_items
              SET content = ?1, preview = ?2, updated_at = ?3, content_hash = NULL
              WHERE id = ?4",
             params![content, preview, Utc::now().timestamp_millis(), id],
         )?;
+        if updated == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1243,6 +1246,15 @@ mod tests {
         let item = storage.get_item_by_id(&id).unwrap().unwrap();
         assert_eq!(item.content, "original");
         assert_eq!(item.preview, "original");
+    }
+
+    #[test]
+    fn updating_missing_item_content_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage
+            .update_item_content("missing-item", "edited content")
+            .is_err());
     }
 
     #[test]
