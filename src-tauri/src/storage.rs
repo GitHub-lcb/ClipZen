@@ -503,12 +503,15 @@ impl Storage {
 
     /// 增加复制次数
     pub fn increment_copy_count(&self, id: &str) -> Result<()> {
-        self.conn.execute(
+        let updated = self.conn.execute(
             "UPDATE clipboard_items
              SET copy_count = COALESCE(copy_count, 0) + 1, updated_at = ?1
              WHERE id = ?2",
             params![Utc::now().timestamp_millis(), id],
         )?;
+        if updated == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1268,6 +1271,13 @@ mod tests {
         assert_eq!(item.copy_count, 1);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn incrementing_missing_item_copy_count_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage.increment_copy_count("missing-item").is_err());
     }
 
     #[test]
