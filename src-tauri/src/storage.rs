@@ -1,6 +1,6 @@
 // 数据存储模块
 
-use rusqlite::{Connection, Result};
+use rusqlite::{params, Connection, OptionalExtension, Result, Row};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::Utc;
@@ -30,12 +30,39 @@ pub struct Storage {
     conn: Connection,
 }
 
+fn clipboard_item_from_row(row: &Row<'_>) -> Result<ClipboardItem> {
+    let tags_str: Option<String> = row.get(8)?;
+    let tags: Vec<String> = tags_str
+        .as_deref()
+        .and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default();
+    let updated_at: Option<i64> = row.get(9).ok();
+
+    Ok(ClipboardItem {
+        id: row.get(0)?,
+        item_type: row.get(1)?,
+        content: row.get(2)?,
+        preview: row.get(3)?,
+        pinned: row.get::<_, i32>(4)? == 1,
+        protected: row.get::<_, i32>(5)? == 1,
+        created_at: row.get(6)?,
+        file_path: row.get(7)?,
+        updated_at,
+        tags,
+        copy_count: row.get(10)?,
+    })
+}
+
 impl Storage {
     pub fn new() -> Result<Self> {
         // 将数据库存储在用户应用数据目录，避免触发 Tauri 文件监控
         let db_path = get_database_path();
         let conn = Connection::open(db_path)?;
-        
+
+        Self::from_connection(conn)
+    }
+
+    fn from_connection(conn: Connection) -> Result<Self> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clipboard_items (
                 id TEXT PRIMARY KEY,
@@ -236,31 +263,23 @@ impl Storage {
              ORDER BY pinned DESC, created_at DESC"
         )?;
 
-        let items = stmt.query_map([], |row| {
-            let tags_str: String = row.get(8)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-            let updated_at: Option<i64> = row.get(9).ok();
-            
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                item_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                pinned: row.get::<_, i32>(4)? == 1,
-                protected: row.get::<_, i32>(5)? == 1,
-                created_at: row.get(6)?,
-                file_path: row.get(7)?,
-                updated_at,
-                tags,
-                copy_count: row.get(10)?,
-            })
-        })?;
+        let items = stmt.query_map([], clipboard_item_from_row)?;
 
         let mut result = Vec::new();
         for item in items {
             result.push(item?);
         }
         Ok(result)
+    }
+
+    pub fn get_item_by_id(&self, id: &str) -> Result<Option<ClipboardItem>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0)
+             FROM clipboard_items
+             WHERE id = ?1"
+        )?;
+
+        stmt.query_row([id], clipboard_item_from_row).optional()
     }
 
     pub fn get_items_paginated(&self, page: u32, page_size: u32) -> Result<(Vec<ClipboardItem>, u32)> {
@@ -281,28 +300,7 @@ impl Storage {
              LIMIT ?1 OFFSET ?2"
         )?;
 
-        let items = stmt.query_map(
-            [safe_page_size as i64, offset as i64],
-            |row| {
-                let tags_str: String = row.get(8)?;
-                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-                let updated_at: Option<i64> = row.get(9).ok();
-
-                Ok(ClipboardItem {
-                    id: row.get(0)?,
-                    item_type: row.get(1)?,
-                    content: row.get(2)?,
-                    preview: row.get(3)?,
-                    pinned: row.get::<_, i32>(4)? == 1,
-                    protected: row.get::<_, i32>(5)? == 1,
-                    created_at: row.get(6)?,
-                    file_path: row.get(7)?,
-                    updated_at,
-                    tags,
-                    copy_count: row.get(10)?,
-                })
-            },
-        )?;
+        let items = stmt.query_map([safe_page_size as i64, offset as i64], clipboard_item_from_row)?;
 
         let mut result = Vec::new();
         for item in items {
@@ -334,25 +332,7 @@ impl Storage {
 
         let mut stmt = self.conn.prepare(&sql)?;
 
-        let items = stmt.query_map([], |row| {
-            let tags_str: String = row.get(8)?;
-            let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
-            let updated_at: Option<i64> = row.get(9).ok();
-            
-            Ok(ClipboardItem {
-                id: row.get(0)?,
-                item_type: row.get(1)?,
-                content: row.get(2)?,
-                preview: row.get(3)?,
-                pinned: row.get::<_, i32>(4)? == 1,
-                protected: row.get::<_, i32>(5)? == 1,
-                created_at: row.get(6)?,
-                file_path: row.get(7)?,
-                updated_at,
-                tags,
-                copy_count: row.get(10)?,
-            })
-        })?;
+        let items = stmt.query_map([], clipboard_item_from_row)?;
 
         let mut result = Vec::new();
         for item in items {
@@ -390,6 +370,55 @@ impl Storage {
         self.conn.execute(
             "UPDATE clipboard_items SET protected = NOT protected WHERE id = ?1",
             [id],
+        )?;
+        Ok(())
+    }
+
+    pub fn add_tag_to_item(&self, id: &str, tag: &str) -> Result<()> {
+        let tag = tag.trim();
+        if tag.is_empty() {
+            return Ok(());
+        }
+
+        let Some(mut item) = self.get_item_by_id(id)? else {
+            return Ok(());
+        };
+
+        if !item.tags.iter().any(|existing| existing == tag) {
+            item.tags.push(tag.to_string());
+            let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
+            self.conn.execute(
+                "UPDATE clipboard_items SET tags = ?1 WHERE id = ?2",
+                params![tags_json, id],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_tag_from_item(&self, id: &str, tag: &str) -> Result<()> {
+        let Some(mut item) = self.get_item_by_id(id)? else {
+            return Ok(());
+        };
+
+        let original_len = item.tags.len();
+        item.tags.retain(|existing| existing != tag);
+        if item.tags.len() != original_len {
+            let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
+            self.conn.execute(
+                "UPDATE clipboard_items SET tags = ?1 WHERE id = ?2",
+                params![tags_json, id],
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn update_item_content(&self, id: &str, content: &str) -> Result<()> {
+        let preview: String = content.chars().take(100).collect();
+        self.conn.execute(
+            "UPDATE clipboard_items SET content = ?1, preview = ?2, updated_at = ?3 WHERE id = ?4",
+            params![content, preview, Utc::now().timestamp_millis(), id],
         )?;
         Ok(())
     }
@@ -625,7 +654,14 @@ pub fn decrypt_data(encrypted: &str, key: &[u8]) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key};
+    use super::{
+        contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key, Storage,
+    };
+    use rusqlite::Connection;
+
+    fn memory_storage() -> Storage {
+        Storage::from_connection(Connection::open_in_memory().unwrap()).unwrap()
+    }
 
     #[test]
     fn detects_sensitive_phone_email_id_card_and_bank_card() {
@@ -649,5 +685,53 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(decrypt_data(&first, &key).unwrap(), "secret");
         assert_eq!(decrypt_data(&second, &key).unwrap(), "secret");
+    }
+
+    #[test]
+    fn updates_single_item_tags_and_content_by_id() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("original").unwrap();
+
+        storage.add_tag_to_item(&id, "work").unwrap();
+        storage.add_tag_to_item(&id, "work").unwrap();
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert_eq!(item.tags, vec!["work"]);
+
+        storage.update_item_content(&id, "updated content").unwrap();
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert_eq!(item.content, "updated content");
+        assert_eq!(item.preview, "updated content");
+        assert!(item.updated_at.is_some());
+
+        storage.remove_tag_from_item(&id, "work").unwrap();
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn tagging_image_items_preserves_content_hash() {
+        let storage = memory_storage();
+        let id = storage
+            .save_image_item(&[1, 2, 3], "preview", "image.png", "image-hash")
+            .unwrap();
+
+        storage.add_tag_to_item(&id, "image").unwrap();
+        assert!(storage.hash_exists("image-hash").unwrap());
+
+        storage.remove_tag_from_item(&id, "image").unwrap();
+        assert!(storage.hash_exists("image-hash").unwrap());
+    }
+
+    #[test]
+    fn legacy_null_tags_read_as_empty_tags() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('legacy', 'text', 'content', 'content', 0, 0, 1, '', NULL)",
+            [],
+        ).unwrap();
+
+        let item = storage.get_item_by_id("legacy").unwrap().unwrap();
+        assert!(item.tags.is_empty());
     }
 }

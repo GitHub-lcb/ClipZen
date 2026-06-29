@@ -106,12 +106,10 @@ pub fn save_to_history(
 pub fn delete_history_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
     let storage = storage.lock().unwrap();
     // 如果是图片，删除文件
-    if let Ok(item) = storage.get_all_items() {
-        if let Some(found) = item.iter().find(|i| i.id == id) {
-            if found.item_type == "image" {
-                if let Some(path) = &found.file_path {
-                    fs::remove_file(path).ok();
-                }
+    if let Ok(Some(item)) = storage.get_item_by_id(&id) {
+        if item.item_type == "image" {
+            if let Some(path) = &item.file_path {
+                fs::remove_file(path).ok();
             }
         }
     }
@@ -207,27 +205,24 @@ pub fn copy_image(
     storage: State<Arc<Mutex<Storage>>>,
     clipboard: State<Arc<Mutex<ClipboardManager>>>,
 ) -> Result<(), String> {
-    let storage_guard = storage.lock().unwrap();
-    let items = storage_guard.get_all_items().map_err(|e| e.to_string())?;
-    let item = items.iter().find(|i| i.id == item_id)
-        .ok_or_else(|| "Item not found".to_string())?;
-    
-    if item.item_type != "image" {
-        return Err("Item is not an image".to_string());
-    }
-    
-    let image_data: Vec<u8>;
-    
-    if let Some(ref file_path) = item.file_path {
-        if let Ok(data) = fs::read(file_path) {
-            image_data = data;
-        } else {
-            return Err(format!("Failed to read image file: {}", file_path));
+    let file_path = {
+        let storage_guard = storage.lock().unwrap();
+        let item = storage_guard
+            .get_item_by_id(&item_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Item not found".to_string())?;
+
+        if item.item_type != "image" {
+            return Err("Item is not an image".to_string());
         }
-    } else {
-        return Err("Image file path not found".to_string());
-    }
-    
+
+        item.file_path
+            .ok_or_else(|| "Image file path not found".to_string())?
+    };
+
+    let image_data = fs::read(&file_path)
+        .map_err(|_| format!("Failed to read image file: {}", file_path))?;
+
     let clipboard_guard = clipboard.lock().unwrap();
     clipboard_guard.set_image(&image_data)
 }
@@ -378,15 +373,8 @@ pub fn add_tag_to_item(
     storage: State<Arc<Mutex<Storage>>>,
 ) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    let items = storage.get_all_items().map_err(|e| e.to_string())?;
-    
-    if let Some(mut item) = items.into_iter().find(|i| i.id == item_id) {
-        if !item.tags.contains(&tag) {
-            item.tags.push(tag);
-        }
-        storage.save_item(&item).map_err(|e| e.to_string())?;
-    }
-    
+    storage.add_tag_to_item(&item_id, &tag).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -398,13 +386,8 @@ pub fn remove_tag_from_item(
     storage: State<Arc<Mutex<Storage>>>,
 ) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    let items = storage.get_all_items().map_err(|e| e.to_string())?;
-    
-    if let Some(mut item) = items.into_iter().find(|i| i.id == item_id) {
-        item.tags.retain(|t| *t != tag);
-        storage.save_item(&item).map_err(|e| e.to_string())?;
-    }
-    
+    storage.remove_tag_from_item(&item_id, &tag).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -416,16 +399,8 @@ pub fn update_item_content(
     storage: State<Arc<Mutex<Storage>>>,
 ) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    let items = storage.get_all_items().map_err(|e| e.to_string())?;
-    
-    if let Some(mut item) = items.into_iter().find(|i| i.id == item_id) {
-        item.content = content.clone();
-        // 更新预览（取前100字符）
-        item.preview = content.chars().take(100).collect();
-        item.updated_at = Some(chrono::Utc::now().timestamp_millis());
-        storage.save_item(&item).map_err(|e| e.to_string())?;
-    }
-    
+    storage.update_item_content(&item_id, &content).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
