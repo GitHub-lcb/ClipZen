@@ -39,6 +39,16 @@ impl Default for AppSettings {
     }
 }
 
+pub const MIN_HISTORY_ITEMS: u32 = 100;
+pub const MAX_HISTORY_ITEMS: u32 = 10_000;
+
+pub fn sanitize_settings(mut settings: AppSettings) -> AppSettings {
+    settings.max_history_items = settings
+        .max_history_items
+        .clamp(MIN_HISTORY_ITEMS, MAX_HISTORY_ITEMS);
+    settings
+}
+
 pub struct SettingsManager {
     config_path: PathBuf,
 }
@@ -60,12 +70,21 @@ impl SettingsManager {
     pub fn load(&self) -> AppSettings {
         if let Ok(content) = fs::read_to_string(&self.config_path) {
             let mut settings: AppSettings = serde_json::from_str(&content).unwrap_or_default();
+            let original_max_history_items = settings.max_history_items;
+            let mut should_save = false;
             // 如果没有加密密钥，生成一个新的
             if settings.encryption_key.is_none() {
                 use base64::{Engine as _, engine::general_purpose::STANDARD};
                 let key = crate::storage::generate_encryption_key();
                 settings.encryption_key = Some(STANDARD.encode(key));
                 // 保存生成的密钥
+                should_save = true;
+            }
+            settings = sanitize_settings(settings);
+            if settings.max_history_items != original_max_history_items {
+                should_save = true;
+            }
+            if should_save {
                 self.save(&settings).ok();
             }
             settings
@@ -109,4 +128,44 @@ pub fn hash_password(password: &str) -> String {
 
 pub fn verify_password_hash(password: &str, hash: &str) -> bool {
     bcrypt::verify(password, hash).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    fn temp_settings_path() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "clipzen-settings-{}.json",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    fn settings_with_history_limit(max_history_items: u32) -> AppSettings {
+        AppSettings {
+            max_history_items,
+            encryption_key: Some(STANDARD.encode(crate::storage::generate_encryption_key())),
+            ..AppSettings::default()
+        }
+    }
+
+    #[test]
+    fn load_clamps_existing_history_limit_before_returning_and_persisting() {
+        let config_path = temp_settings_path();
+        let manager = SettingsManager {
+            config_path: config_path.clone(),
+        };
+        let settings = settings_with_history_limit(50_000);
+        std::fs::write(&config_path, serde_json::to_string(&settings).unwrap()).unwrap();
+
+        let loaded = manager.load();
+        let persisted: AppSettings =
+            serde_json::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+
+        assert_eq!(loaded.max_history_items, 10_000);
+        assert_eq!(persisted.max_history_items, 10_000);
+
+        std::fs::remove_file(config_path).ok();
+    }
 }

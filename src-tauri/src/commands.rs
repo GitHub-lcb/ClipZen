@@ -2,7 +2,9 @@
 
 use crate::clipboard::{ClipboardManager, ClipboardContent};
 use crate::storage::Storage;
-use crate::settings::{SettingsManager, AppSettings, hash_password, verify_password_hash};
+use crate::settings::{
+    hash_password, sanitize_settings, verify_password_hash, AppSettings, SettingsManager,
+};
 use crate::license::{LicenseManager, LicenseInfo, LicenseType, ActivationResult};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use tauri::State;
@@ -267,9 +269,6 @@ pub fn get_settings(settings: State<Arc<Mutex<SettingsManager>>>) -> AppSettings
     settings.load()
 }
 
-const MIN_HISTORY_ITEMS: u32 = 100;
-const MAX_HISTORY_ITEMS: u32 = 10_000;
-
 fn merge_settings_for_save(
     mut new_settings: AppSettings,
     existing_settings: &AppSettings,
@@ -280,10 +279,7 @@ fn merge_settings_for_save(
     if new_settings.encryption_key.is_none() {
         new_settings.encryption_key = existing_settings.encryption_key.clone();
     }
-    new_settings.max_history_items = new_settings
-        .max_history_items
-        .clamp(MIN_HISTORY_ITEMS, MAX_HISTORY_ITEMS);
-    new_settings
+    sanitize_settings(new_settings)
 }
 
 /// 保存设置
