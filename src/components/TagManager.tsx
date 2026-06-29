@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tag, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,6 @@ export function TagManager({
 
   const loadAllTags = useCallback(async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const tags = await invoke<string[]>("get_all_tags");
       setLoadedTags(tags);
     } catch (error) {
@@ -47,7 +47,6 @@ export function TagManager({
     }
 
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       await invoke("add_tag_to_item", { itemId, tag: trimmedTag });
       const newTags = [...currentTags, trimmedTag];
       onTagsChange(newTags);
@@ -63,7 +62,6 @@ export function TagManager({
 
   const removeTag = async (tag: string) => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remove_tag_from_item", { itemId, tag });
       const newTags = currentTags.filter(t => t !== tag);
       onTagsChange(newTags);

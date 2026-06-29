@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Key, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -28,6 +28,15 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current !== null) {
+        window.clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -63,9 +72,13 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
       if (result.success) {
         setSuccess(true);
         setLicenseInfo(result.license_info);
-        setTimeout(() => {
+        if (closeTimeoutRef.current !== null) {
+          window.clearTimeout(closeTimeoutRef.current);
+        }
+        closeTimeoutRef.current = window.setTimeout(() => {
           onActivated();
           handleClose();
+          closeTimeoutRef.current = null;
         }, 2000);
       } else {
         setError(result.message);
@@ -78,6 +91,10 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
   };
 
   const handleClose = () => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
     setCode('');
     setError('');
     setSuccess(false);

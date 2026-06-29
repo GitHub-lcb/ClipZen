@@ -41,6 +41,7 @@ export function useClipboard() {
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
   const requestVersionRef = useRef(0);
+  const errorTimeoutRef = useRef<number | null>(null);
 
   // 加载历史记录（分页）
   const loadItems = useCallback(async (page: number = 1, reset: boolean = false) => {
@@ -81,7 +82,13 @@ export function useClipboard() {
       // 添加错误状态
       setError("Failed to load clipboard history. Please try again.");
       // 3秒后清除错误
-      setTimeout(() => setError(null), 3000);
+      if (errorTimeoutRef.current !== null) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
+      errorTimeoutRef.current = window.setTimeout(() => {
+        setError(null);
+        errorTimeoutRef.current = null;
+      }, 3000);
     } finally {
       if (requestVersion === requestVersionRef.current) {
         setLoading(false);
@@ -224,6 +231,14 @@ export function useClipboard() {
       unlisten.then(fn => fn());
     };
   }, [loadItems]);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current !== null) {
+        window.clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const refresh = useCallback(() => loadItems(1, true), [loadItems]);
 

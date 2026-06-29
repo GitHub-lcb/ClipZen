@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings, X, Save, RotateCcw, Monitor, Moon, Sun, Globe, 
@@ -7,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { applyTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 interface AppSettings {
@@ -47,10 +50,32 @@ export function SettingsPanel({
   const [importing, setImporting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [keepPinned, setKeepPinned] = useState(true);
+  const messageTimeoutRef = useRef<number | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+
+  const clearScheduledFeedback = useCallback(() => {
+    if (messageTimeoutRef.current !== null) {
+      window.clearTimeout(messageTimeoutRef.current);
+      messageTimeoutRef.current = null;
+    }
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearMessageLater = useCallback((delay: number) => {
+    if (messageTimeoutRef.current !== null) {
+      window.clearTimeout(messageTimeoutRef.current);
+    }
+    messageTimeoutRef.current = window.setTimeout(() => {
+      setMessage(null);
+      messageTimeoutRef.current = null;
+    }, delay);
+  }, []);
 
   const loadSettings = useCallback(async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke<AppSettings>("get_settings");
       setSettings(result);
       setSavedSettings(result);
@@ -63,6 +88,8 @@ export function SettingsPanel({
   useEffect(() => {
     if (isOpen) loadSettings();
   }, [isOpen, loadSettings]);
+
+  useEffect(() => clearScheduledFeedback, [clearScheduledFeedback]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -77,18 +104,9 @@ export function SettingsPanel({
     if (!settings) return;
     setSaving(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       await invoke("save_settings", { newSettings: settings });
       setSavedSettings(settings);
-      
-      const root = document.documentElement;
-      root.classList.remove("light", "dark");
-      if (settings.theme === "system") {
-        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        root.classList.add(systemDark ? "dark" : "light");
-      } else {
-        root.classList.add(settings.theme);
-      }
+      applyTheme(settings.theme);
       
       if (onFeatureSettingsChange) {
         onFeatureSettingsChange(settings.enable_password_protection, settings.enable_masked_copy);
@@ -96,7 +114,12 @@ export function SettingsPanel({
       
       setMessage({ type: 'success', text: t('settings.saved') });
       changeLocale(settings.language);
-      setTimeout(() => { setMessage(null); onClose(); }, 1500);
+      clearScheduledFeedback();
+      closeTimeoutRef.current = window.setTimeout(() => {
+        setMessage(null);
+        onClose();
+        closeTimeoutRef.current = null;
+      }, 1500);
     } catch (error) {
       console.error("Failed to save settings:", error);
       setMessage({ type: 'error', text: t('settings.saveFailed') });
@@ -129,9 +152,6 @@ export function SettingsPanel({
   const exportData = async () => {
     setExporting(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const { save } = await import("@tauri-apps/plugin-dialog");
-      
       const filePath = await save({
         title: t('dataManager.export'),
         defaultPath: "clipzen-export.json",
@@ -141,7 +161,7 @@ export function SettingsPanel({
       if (filePath) {
         const count = await invoke<number>("export_history", { filePath });
         setMessage({ type: 'success', text: t('dataManager.exportSuccess', { n: count }) });
-        setTimeout(() => setMessage(null), 3000);
+        clearMessageLater(3000);
       }
     } catch (error) {
       console.error("Failed to export:", error);
@@ -154,9 +174,6 @@ export function SettingsPanel({
   const importData = async () => {
     setImporting(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      
       const filePath = await open({
         title: t('dataManager.import'),
         multiple: false,
@@ -168,7 +185,7 @@ export function SettingsPanel({
         const count = await invoke<number>("import_history", { filePath: path });
         setMessage({ type: 'success', text: t('dataManager.importSuccess', { n: count }) });
         if (onRefresh) onRefresh();
-        setTimeout(() => setMessage(null), 3000);
+        clearMessageLater(3000);
       }
     } catch (error) {
       console.error("Failed to import:", error);
@@ -181,11 +198,10 @@ export function SettingsPanel({
   const clearData = async () => {
     setClearing(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const count = await invoke<number>("clear_all_history", { keepPinned });
       setMessage({ type: 'success', text: t('dataManager.clearSuccess', { n: count }) });
       if (onRefresh) onRefresh();
-      setTimeout(() => setMessage(null), 3000);
+      clearMessageLater(3000);
     } catch (error) {
       console.error("Failed to clear:", error);
       setMessage({ type: 'error', text: t('dataManager.clearFailed') });

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, Edit2, Eye, EyeOff, Check, RotateCcw, 
@@ -96,12 +97,32 @@ export function ItemDetail({
   const [hasGlobalPwd, setHasGlobalPwd] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [imageData, setImageData] = useState<string | null>(null);
+  const copySuccessTimeoutRef = useRef<number | null>(null);
+
+  const showCopySuccess = useCallback(() => {
+    if (copySuccessTimeoutRef.current !== null) {
+      window.clearTimeout(copySuccessTimeoutRef.current);
+    }
+
+    setCopySuccess(true);
+    copySuccessTimeoutRef.current = window.setTimeout(() => {
+      setCopySuccess(false);
+      copySuccessTimeoutRef.current = null;
+    }, 1500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copySuccessTimeoutRef.current !== null) {
+        window.clearTimeout(copySuccessTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (item.item_type === "image" && item.file_path) {
       const loadImage = async () => {
         try {
-          const { invoke } = await import("@tauri-apps/api/core");
           const data = await invoke<string>("get_image_data", { filePath: item.file_path });
           setImageData(data);
         } catch (error) {
@@ -124,7 +145,6 @@ export function ItemDetail({
 
   useEffect(() => {
     const checkGlobalPassword = async () => {
-      const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke<boolean>("has_global_password");
       setHasGlobalPwd(result);
     };
@@ -155,24 +175,19 @@ export function ItemDetail({
   };
 
   const handleCopyMasked = async () => {
-    const { invoke } = await import("@tauri-apps/api/core");
     const maskedContent = getMaskedContentForCopy();
     await invoke("copy_masked_content", { content: maskedContent });
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 1500);
+    showCopySuccess();
   };
 
   const handleCopyOriginal = async () => {
-    const { invoke } = await import("@tauri-apps/api/core");
     await invoke("copy_to_clipboard", { content: item.content });
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 1500);
+    showCopySuccess();
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       await invoke("update_content", { id: item.id, newContent: editContent });
       setIsEditing(false);
       onUpdate();
@@ -189,14 +204,12 @@ export function ItemDetail({
   };
 
   const handleToggleProtected = async () => {
-    const { invoke } = await import("@tauri-apps/api/core");
     await invoke("toggle_protected", { id: item.id });
     setIsProtected(!isProtected);
     onUpdate();
   };
 
   const handlePasswordConfirm = async (password: string) => {
-    const { invoke } = await import("@tauri-apps/api/core");
     const isValid = await invoke<boolean>("verify_password", { password });
     
     if (isValid) {

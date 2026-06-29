@@ -142,6 +142,7 @@ function App() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const searchRequestRef = useRef(0);
+  const copiedTimeoutRef = useRef<number | null>(null);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(50);
   const ITEM_HEIGHT = 120;
@@ -164,7 +165,6 @@ function App() {
   useEffect(() => {
     const loadFeatureSettings = async () => {
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
         const settings = await invoke<{
           enable_password_protection: boolean;
           enable_masked_copy: boolean;
@@ -178,7 +178,6 @@ function App() {
     
     const loadLicenseInfo = async () => {
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
         const info = await invoke<LicenseInfo | null>("get_license_info");
         if (info) {
           setIsPro(true);
@@ -382,11 +381,30 @@ function App() {
     setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
   }, [recentItems.length, activeSearchQuery, selectedTag, sortBy, sortOrder]);
 
+  const showCopiedFeedback = useCallback((id: string) => {
+    if (copiedTimeoutRef.current !== null) {
+      window.clearTimeout(copiedTimeoutRef.current);
+    }
+
+    setCopiedId(id);
+    copiedTimeoutRef.current = window.setTimeout(() => {
+      setCopiedId(null);
+      copiedTimeoutRef.current = null;
+    }, 1500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current !== null) {
+        window.clearTimeout(copiedTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleCopyWithFeedback = useCallback(async (item: ClipboardItem) => {
     await copyToClipboard(item);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 1500);
-  }, [copyToClipboard]);
+    showCopiedFeedback(item.id);
+  }, [copyToClipboard, showCopiedFeedback]);
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
@@ -479,7 +497,6 @@ function App() {
     if (item.item_type === "image") {
       if (item.file_path) {
         try {
-          const { invoke } = await import("@tauri-apps/api/core");
           const imageData = await invoke<string>("get_image_data", { filePath: item.file_path });
           setPreviewImage(imageData);
         } catch (error) {
@@ -526,8 +543,7 @@ function App() {
   const handleMaskedCopy = async (item: ClipboardItem) => {
     const maskedContent = getMaskedContent(item.content);
     await invoke("copy_to_clipboard", { content: maskedContent });
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 1500);
+    showCopiedFeedback(item.id);
   };
 
   const getDisplayContent = (item: ClipboardItem): string => {
