@@ -12,7 +12,6 @@ import { Card } from "@/components/ui/card";
 import {
   detectSensitive,
   maskSensitiveContent,
-  type SensitiveMatch,
 } from "@/lib/sensitive";
 
 interface ItemDetailProps {
@@ -44,7 +43,6 @@ export function ItemDetail({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
   const [isMasked, setIsMasked] = useState(false);
-  const [sensitiveMatches, setSensitiveMatches] = useState<SensitiveMatch[]>([]);
   const [saving, setSaving] = useState(false);
   const [tags, setTags] = useState<string[]>(item.tags || []);
   const [isProtected, setIsProtected] = useState(item.protected || false);
@@ -94,12 +92,6 @@ export function ItemDetail({
   }, [item.content, item.file_path, item.item_type]);
 
   useEffect(() => {
-    setSensitiveMatches(item.item_type === "text" ? detectSensitive(item.content) : []);
-    setIsProtected(item.protected || false);
-    setShowProtectedContent(false);
-  }, [item.content, item.item_type, item.protected]);
-
-  useEffect(() => {
     const checkGlobalPassword = async () => {
       const result = await invoke<boolean>("has_global_password");
       setHasGlobalPwd(result);
@@ -116,11 +108,20 @@ export function ItemDetail({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [item, onClose]);
 
+  const sensitiveMatches = useMemo(
+    () => (item.item_type === "text" ? detectSensitive(item.content) : []),
+    [item.content, item.item_type]
+  );
   const maskedContent = useMemo(
     () => maskSensitiveContent(item.content, sensitiveMatches),
     [item.content, sensitiveMatches]
   );
   const displayContent = isMasked ? maskedContent : item.content;
+
+  useEffect(() => {
+    setIsProtected(item.protected || false);
+    setShowProtectedContent(false);
+  }, [item.id, item.content, item.protected]);
 
   const handleCopyMasked = async () => {
     await invoke("copy_masked_content", { content: maskedContent });
