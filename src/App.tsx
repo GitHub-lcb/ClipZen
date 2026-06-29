@@ -142,7 +142,6 @@ function App() {
   const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
   const [searchedQuery, setSearchedQuery] = useState("");
   const [globalTags, setGlobalTags] = useState<string[]>([]);
-  const [, setSearchLoading] = useState(false);
   const { items, loading, error, loadingMore, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const activeSearchQuery = searchQuery.trim() ? deferredSearchQuery : searchQuery;
@@ -221,7 +220,6 @@ function App() {
   // 搜索处理
   const handleSearch = useCallback(async (query: string) => {
     const requestId = ++searchRequestRef.current;
-    setSearchLoading(true);
     try {
       const results = await invoke<ClipboardItem[]>("search_clipboard_history", {
         query
@@ -236,10 +234,6 @@ function App() {
         setSearchedItems([]);
         setSearchedQuery(query);
       }
-    } finally {
-      if (requestId === searchRequestRef.current) {
-        setSearchLoading(false);
-      }
     }
   }, []);
 
@@ -251,7 +245,6 @@ function App() {
       searchRequestRef.current += 1;
       setSearchedItems([]);
       setSearchedQuery("");
-      setSearchLoading(false);
       return;
     }
 
