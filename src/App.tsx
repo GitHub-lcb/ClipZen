@@ -157,6 +157,14 @@ function App() {
   const ITEM_HEIGHT = 120;
   const MAX_VISIBLE_ITEMS = 50;
 
+  const setItemRef = useCallback((id: string, element: HTMLDivElement | null) => {
+    if (element) {
+      itemRefs.current.set(id, element);
+    } else {
+      itemRefs.current.delete(id);
+    }
+  }, []);
+
   const refreshGlobalTags = useCallback(async () => {
     try {
       const tags = await invoke<string[]>("get_all_tags");
@@ -800,7 +808,7 @@ function App() {
                     <motion.div
                       key={item.id}
                       variants={fadeInUp}
-                      ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                      ref={(el) => setItemRef(item.id, el)}
                       onClick={() => {
                         if (enablePasswordProtection && item.protected) {
                           handleProtectedItemClick(item);
@@ -960,7 +968,7 @@ function App() {
                   <motion.div
                     key={item.id}
                     variants={fadeInUp}
-                    ref={(el) => { if (el) itemRefs.current.set(item.id, el); }}
+                    ref={(el) => setItemRef(item.id, el)}
                     onClick={() => {
                       if (enablePasswordProtection && item.protected) {
                         handleProtectedItemClick(item);
