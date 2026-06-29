@@ -25,6 +25,7 @@ interface ItemDetailProps {
   onUpdate: () => void;
   t: (key: string) => string;
   enablePasswordProtection?: boolean;
+  allTags?: string[];
 }
 
 const SENSITIVE_PATTERNS = [
@@ -77,7 +78,8 @@ function detectSensitive(content: string): SensitiveMatch[] {
 
 export function ItemDetail({ 
   item, onClose, onUpdate, t, 
-  enablePasswordProtection = false
+  enablePasswordProtection = false,
+  allTags = [],
 }: ItemDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
@@ -453,6 +455,7 @@ export function ItemDetail({
                   onUpdate();
                 }} 
                 t={t} 
+                allTags={allTags}
               />
             </motion.div>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tag, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,37 +9,53 @@ interface TagManagerProps {
   currentTags: string[];
   onTagsChange: (tags: string[]) => void;
   t: (key: string) => string;
+  allTags?: string[];
 }
 
-export function TagManager({ itemId, currentTags, onTagsChange, t }: TagManagerProps) {
-  const [allTags, setAllTags] = useState<string[]>([]);
+export function TagManager({
+  itemId,
+  currentTags,
+  onTagsChange,
+  t,
+  allTags: providedTags,
+}: TagManagerProps) {
+  const [loadedTags, setLoadedTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [showInput, setShowInput] = useState(false);
 
-  useEffect(() => {
-    loadAllTags();
-  }, []);
-
-  const loadAllTags = async () => {
+  const loadAllTags = useCallback(async () => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const tags = await invoke<string[]>("get_all_tags");
-      setAllTags(tags);
+      setLoadedTags(tags);
     } catch (error) {
       console.error("Failed to load tags:", error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (providedTags) return;
+    loadAllTags();
+  }, [providedTags, loadAllTags]);
 
   const addTag = async (tag: string) => {
-    if (!tag.trim()) return;
+    const trimmedTag = tag.trim();
+    if (!trimmedTag || currentTags.includes(trimmedTag)) {
+      setNewTag("");
+      setShowInput(false);
+      return;
+    }
+
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("add_tag_to_item", { itemId, tag: tag.trim() });
-      const newTags = [...currentTags, tag.trim()];
+      await invoke("add_tag_to_item", { itemId, tag: trimmedTag });
+      const newTags = [...currentTags, trimmedTag];
       onTagsChange(newTags);
       setNewTag("");
       setShowInput(false);
-      loadAllTags();
+      if (!providedTags) {
+        loadAllTags();
+      }
     } catch (error) {
       console.error("Failed to add tag:", error);
     }
@@ -61,7 +77,12 @@ export function TagManager({ itemId, currentTags, onTagsChange, t }: TagManagerP
     else if (e.key === 'Escape') { setShowInput(false); setNewTag(""); }
   };
 
-  const availableTags = allTags.filter(t => !currentTags.includes(t));
+  const tagsForSuggestions = providedTags ?? loadedTags;
+  const currentTagSet = useMemo(() => new Set(currentTags), [currentTags]);
+  const availableTags = useMemo(
+    () => tagsForSuggestions.filter(tag => !currentTagSet.has(tag)),
+    [tagsForSuggestions, currentTagSet]
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2">

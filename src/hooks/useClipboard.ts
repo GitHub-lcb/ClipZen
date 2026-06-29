@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 export interface ClipboardItem {
   id: string;
@@ -16,18 +16,39 @@ export interface ClipboardItem {
   copy_count?: number;
 }
 
+const PAGE_SIZE = 50;
+
+function appendUniqueItems(items: ClipboardItem[], incoming: ClipboardItem[]) {
+  if (items.length === 0) return incoming;
+
+  const seenIds = new Set(items.map(item => item.id));
+  const uniqueIncoming = incoming.filter(item => {
+    if (seenIds.has(item.id)) return false;
+    seenIds.add(item.id);
+    return true;
+  });
+
+  return uniqueIncoming.length === 0 ? items : [...items, ...uniqueIncoming];
+}
+
 export function useClipboard() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(50);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const requestVersionRef = useRef(0);
 
   // 加载历史记录（分页）
   const loadItems = useCallback(async (page: number = 1, reset: boolean = false) => {
+    const requestVersion = reset ? requestVersionRef.current + 1 : requestVersionRef.current;
+    if (reset) {
+      requestVersionRef.current = requestVersion;
+    }
+
     try {
       if (reset) {
         setLoading(true);
@@ -35,38 +56,52 @@ export function useClipboard() {
       
       const [result, total] = await invoke<[ClipboardItem[], number]>("get_clipboard_history_paginated", {
         page,
-        page_size: pageSize
+        page_size: PAGE_SIZE
       });
+
+      if (requestVersion !== requestVersionRef.current) {
+        return;
+      }
       
       if (reset) {
         setItems(result);
       } else {
-        setItems(prev => [...prev, ...result]);
+        setItems(prev => appendUniqueItems(prev, result));
       }
       
+      setError(null);
       setTotalItems(total);
-      setHasMore(page * pageSize < total);
+      setHasMore(page * PAGE_SIZE < total);
       setCurrentPage(page);
     } catch (error) {
+      if (requestVersion !== requestVersionRef.current) {
+        return;
+      }
       console.error("Failed to load clipboard history:", error);
       // 添加错误状态
       setError("Failed to load clipboard history. Please try again.");
       // 3秒后清除错误
       setTimeout(() => setError(null), 3000);
     } finally {
-      setLoading(false);
+      if (requestVersion === requestVersionRef.current) {
+        setLoading(false);
+      }
     }
-  }, [pageSize]);
+  }, []);
 
   // 加载更多数据
   const loadMore = useCallback(() => {
-    if (!loading && !loadingMore && hasMore) {
-      setLoadingMore(true);
-      loadItems(currentPage + 1, false).finally(() => {
-        setLoadingMore(false);
-      });
+    if (loading || loadingMoreRef.current || !hasMore) {
+      return;
     }
-  }, [loading, loadingMore, hasMore, currentPage, loadItems]);
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    loadItems(currentPage + 1, false).finally(() => {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    });
+  }, [loading, hasMore, currentPage, loadItems]);
 
   // 复制到剪贴板
   const copyToClipboard = useCallback(async (item: ClipboardItem) => {
@@ -78,6 +113,18 @@ export function useClipboard() {
       }
       // 增加复制次数
       await invoke("increment_copy_count", { id: item.id });
+      const copiedAt = Date.now();
+      setItems(prev =>
+        prev.map(existing =>
+          existing.id === item.id
+            ? {
+                ...existing,
+                copy_count: (existing.copy_count ?? item.copy_count ?? 0) + 1,
+                updated_at: copiedAt,
+              }
+            : existing
+        )
+      );
     } catch (error) {
       console.error("Failed to copy:", error);
       throw error;
@@ -89,7 +136,7 @@ export function useClipboard() {
     try {
       await invoke("delete_history_item", { id });
       setItems(prev => prev.filter(item => item.id !== id));
-      setTotalItems(prev => prev - 1);
+      setTotalItems(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error("Failed to delete:", error);
     }
@@ -178,6 +225,8 @@ export function useClipboard() {
     };
   }, [loadItems]);
 
+  const refresh = useCallback(() => loadItems(1, true), [loadItems]);
+
   return {
     items,
     loading,
@@ -185,7 +234,7 @@ export function useClipboard() {
     loadingMore,
     totalItems,
     currentPage,
-    pageSize,
+    pageSize: PAGE_SIZE,
     hasMore,
     loadMore,
     copyToClipboard,
@@ -196,6 +245,6 @@ export function useClipboard() {
     verifyPassword,
     hasGlobalPassword,
     setGlobalPassword,
-    refresh: () => loadItems(1, true),
+    refresh,
   };
 }

@@ -1,4 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useDeferredValue,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -124,8 +131,12 @@ function App() {
   const [isPro, setIsPro] = useState(false);
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [searchedItems, setSearchedItems] = useState<ClipboardItem[]>([]);
+  const [searchedQuery, setSearchedQuery] = useState("");
   const [, setSearchLoading] = useState(false);
   const { items, loading, error, loadingMore, hasMore, loadMore, copyToClipboard, deleteItem, togglePin, refresh, verifyPassword } = useClipboard();
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const activeSearchQuery = searchQuery.trim() ? deferredSearchQuery : searchQuery;
+  const isSearching = searchQuery.trim().length > 0;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -185,11 +196,13 @@ function App() {
       });
       if (requestId === searchRequestRef.current) {
         setSearchedItems(results);
+        setSearchedQuery(query);
       }
     } catch (error) {
       console.error("Failed to search:", error);
       if (requestId === searchRequestRef.current) {
         setSearchedItems([]);
+        setSearchedQuery(query);
       }
     } finally {
       if (requestId === searchRequestRef.current) {
@@ -205,6 +218,7 @@ function App() {
     if (!query) {
       searchRequestRef.current += 1;
       setSearchedItems([]);
+      setSearchedQuery("");
       setSearchLoading(false);
       return;
     }
@@ -217,7 +231,13 @@ function App() {
   }, [searchQuery, handleSearch]);
 
   const filteredItems = useMemo(() => {
-    let result = searchQuery.trim() ? searchedItems : items;
+    const normalizedSearchQuery = activeSearchQuery.trim();
+    let result = items;
+
+    if (normalizedSearchQuery) {
+      result = searchedQuery === normalizedSearchQuery ? searchedItems : [];
+    }
+
     if (selectedTag) {
       result = result.filter(item => (item.tags || []).includes(selectedTag));
     }
@@ -246,7 +266,7 @@ function App() {
         case "popularity": {
           const aLastCopy = a.updated_at || a.created_at;
           const bLastCopy = b.updated_at || b.created_at;
-          const copyTimeDiff = bLastCopy - aLastCopy;
+          const copyTimeDiff = (aLastCopy - bLastCopy) * multiplier;
           if (copyTimeDiff !== 0) return copyTimeDiff;
           const aCount = a.copy_count || 0;
           const bCount = b.copy_count || 0;
@@ -259,10 +279,22 @@ function App() {
     });
     
     return sorted;
-  }, [items, searchedItems, selectedTag, searchQuery, sortBy, sortOrder]);
+  }, [items, searchedItems, searchedQuery, selectedTag, activeSearchQuery, sortBy, sortOrder]);
 
-  const pinnedItems = filteredItems.filter(item => item.pinned);
-  const recentItems = filteredItems.filter(item => !item.pinned);
+  const { pinnedItems, recentItems } = useMemo(() => {
+    const pinned: ClipboardItem[] = [];
+    const recent: ClipboardItem[] = [];
+
+    for (const item of filteredItems) {
+      if (item.pinned) {
+        pinned.push(item);
+      } else {
+        recent.push(item);
+      }
+    }
+
+    return { pinnedItems: pinned, recentItems: recent };
+  }, [filteredItems]);
   const allFilteredItems = filteredItems;
 
   const scrollToSelectedItem = useCallback(() => {
@@ -296,7 +328,7 @@ function App() {
     const scrollHeight = container.scrollHeight;
     
     // 当滚动到接近底部时，加载更多数据
-    if (scrollTop + containerHeight >= scrollHeight - 200 && hasMore) {
+    if (!isSearching && scrollTop + containerHeight >= scrollHeight - 200 && hasMore) {
       loadMore();
     }
     
@@ -315,7 +347,7 @@ function App() {
       setStartIndex(newStartIndex);
       setEndIndex(newEndIndex);
     }
-  }, [recentItems.length, hasMore, loadMore]);
+  }, [recentItems.length, hasMore, loadMore, isSearching]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -332,7 +364,7 @@ function App() {
   useEffect(() => {
     setStartIndex(0);
     setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
-  }, [recentItems.length, searchQuery, selectedTag, sortBy, sortOrder]);
+  }, [recentItems.length, activeSearchQuery, selectedTag, sortBy, sortOrder]);
 
   const handleCopyWithFeedback = useCallback(async (item: ClipboardItem) => {
     await copyToClipboard(item);
@@ -663,7 +695,19 @@ function App() {
           licenseInfo={licenseInfo}
         />
         
-        {detailItem && <ItemDetail item={detailItem} onClose={() => { setDetailItem(null); setUnlockedItems(new Set()); }} onUpdate={refresh} t={t} enablePasswordProtection={enablePasswordProtection} />}
+        {detailItem && (
+          <ItemDetail
+            item={detailItem}
+            onClose={() => {
+              setDetailItem(null);
+              setUnlockedItems(new Set());
+            }}
+            onUpdate={refresh}
+            t={t}
+            enablePasswordProtection={enablePasswordProtection}
+            allTags={allTags}
+          />
+        )}
         
         <PasswordDialog
           isOpen={passwordDialogOpen}
@@ -912,7 +956,13 @@ function App() {
                             </div>
                           )}
                           <div className="mt-3">
-                            <TagManager itemId={item.id} currentTags={item.tags || []} onTagsChange={() => refresh()} t={t} />
+                            <TagManager
+                              itemId={item.id}
+                              currentTags={item.tags || []}
+                              onTagsChange={() => refresh()}
+                              t={t}
+                              allTags={allTags}
+                            />
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
