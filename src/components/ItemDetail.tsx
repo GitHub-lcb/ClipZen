@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -9,6 +9,11 @@ import { TagManager } from "./TagManager";
 import { PasswordDialog } from "./PasswordDialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  detectSensitive,
+  maskSensitiveContent,
+  type SensitiveMatch,
+} from "@/lib/sensitive";
 
 interface ItemDetailProps {
   item: {
@@ -28,53 +33,6 @@ interface ItemDetailProps {
   locale: string;
   enablePasswordProtection?: boolean;
   allTags?: string[];
-}
-
-const SENSITIVE_PATTERNS = [
-  { pattern: /1[3-9]\d{9}/g, type: "phone" },
-  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email" },
-  { pattern: /\d{17}[\dXx]/g, type: "idcard" },
-  { pattern: /\b\d{16,19}\b/g, type: "bankcard" },
-];
-
-interface SensitiveMatch {
-  type: string;
-  original: string;
-  masked: string;
-}
-
-function detectSensitive(content: string): SensitiveMatch[] {
-  const matches: SensitiveMatch[] = [];
-  
-  for (const { pattern, type } of SENSITIVE_PATTERNS) {
-    const found = content.match(pattern);
-    if (found) {
-      for (const text of found) {
-        let masked: string;
-        switch (type) {
-          case "phone":
-            masked = text.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
-            break;
-          case "email": {
-            const [local, domain] = text.split("@");
-            masked = local.slice(0, 2) + "***@" + domain;
-            break;
-          }
-          case "idcard":
-            masked = text.replace(/(\d{4})\d{10}(\d{4})/, "$1**********$2");
-            break;
-          case "bankcard":
-            masked = text.replace(/(\d{4})\d+(\d{4})/, "$1****$2");
-            break;
-          default:
-            masked = "****";
-        }
-        matches.push({ type, original: text, masked });
-      }
-    }
-  }
-  
-  return matches;
 }
 
 export function ItemDetail({ 
@@ -136,10 +94,7 @@ export function ItemDetail({
   }, [item.content, item.file_path, item.item_type]);
 
   useEffect(() => {
-    if (item.item_type === "text") {
-      const matches = detectSensitive(item.content);
-      setSensitiveMatches(matches);
-    }
+    setSensitiveMatches(item.item_type === "text" ? detectSensitive(item.content) : []);
     setIsProtected(item.protected || false);
     setShowProtectedContent(false);
   }, [item.content, item.item_type, item.protected]);
@@ -161,22 +116,13 @@ export function ItemDetail({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [item, onClose]);
 
-  const displayContent = isMasked
-    ? sensitiveMatches.reduce(
-        (text, match) => text.replace(match.original, match.masked),
-        item.content
-      )
-    : item.content;
-
-  const getMaskedContentForCopy = () => {
-    return sensitiveMatches.reduce(
-      (text, match) => text.replace(match.original, match.masked),
-      item.content
-    );
-  };
+  const maskedContent = useMemo(
+    () => maskSensitiveContent(item.content, sensitiveMatches),
+    [item.content, sensitiveMatches]
+  );
+  const displayContent = isMasked ? maskedContent : item.content;
 
   const handleCopyMasked = async () => {
-    const maskedContent = getMaskedContentForCopy();
     await invoke("copy_masked_content", { content: maskedContent });
     showCopySuccess();
   };

@@ -31,76 +31,11 @@ import {
 } from "@/components/ui/tooltip";
 import { TagFilter } from "@/components/TagFilter";
 import type { LicenseInfo } from "@/components/LicenseDialog";
+import { hasSensitiveInfo, maskSensitiveContent } from "@/lib/sensitive";
 import { cn } from "@/lib/utils";
-
-const SENSITIVE_PATTERNS = [
-  { pattern: /1[3-9]\d{9}/g, type: "phone" },
-  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email" },
-  { pattern: /\d{17}[\dXx]/g, type: "idcard" },
-  { pattern: /\b\d{16,19}\b/g, type: "bankcard" },
-];
 
 const EMPTY_TAGS: readonly string[] = [];
 const EMPTY_ITEM_IDS: ReadonlySet<string> = new Set();
-
-interface SensitiveMatch {
-  type: string;
-  original: string;
-  masked: string;
-}
-
-function detectSensitive(content: string): SensitiveMatch[] {
-  const matches: SensitiveMatch[] = [];
-  for (const { pattern, type } of SENSITIVE_PATTERNS) {
-    pattern.lastIndex = 0;
-    const found = content.match(pattern);
-    pattern.lastIndex = 0;
-    if (found) {
-      for (const text of found) {
-        let masked: string;
-        switch (type) {
-          case "phone":
-            masked = text.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
-            break;
-          case "email": {
-            const [local, domain] = text.split("@");
-            masked = local.slice(0, 2) + "***@" + domain;
-            break;
-          }
-          case "idcard":
-            masked = text.replace(/(\d{4})\d{10}(\d{4})/, "$1**********$2");
-            break;
-          case "bankcard":
-            masked = text.replace(/(\d{4})\d+(\d{4})/, "$1****$2");
-            break;
-          default:
-            masked = "****";
-        }
-        matches.push({ type, original: text, masked });
-      }
-    }
-  }
-  return matches;
-}
-
-function getMaskedContent(content: string): string {
-  const matches = detectSensitive(content);
-  return matches.reduce(
-    (text, match) => text.replace(match.original, match.masked),
-    content
-  );
-}
-
-function hasSensitiveInfo(content: string): boolean {
-  for (const { pattern } of SENSITIVE_PATTERNS) {
-    pattern.lastIndex = 0;
-    const found = pattern.test(content);
-    pattern.lastIndex = 0;
-    if (found) return true;
-  }
-
-  return false;
-}
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -659,7 +594,7 @@ function App() {
   };
 
   const handleMaskedCopy = async (item: ClipboardItem) => {
-    const maskedContent = getMaskedContent(item.content);
+    const maskedContent = maskSensitiveContent(item.content);
     await invoke("copy_to_clipboard", { content: maskedContent });
     showCopiedFeedback(item.id);
   };
