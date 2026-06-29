@@ -164,18 +164,18 @@ impl Storage {
     /// 清理超出限制的旧记录（保留置顶）
     pub fn cleanup_old_items(&self, max_items: u32) -> Result<usize> {
         // 获取非置顶记录数量
-        let count: i32 = self.conn.query_row(
+        let count: u32 = self.conn.query_row(
             "SELECT COUNT(*) FROM clipboard_items WHERE pinned = 0",
             [],
             |row| row.get(0)
         )?;
         
-        if count <= max_items as i32 {
+        if count <= max_items {
             return Ok(0);
         }
         
         // 删除最旧的非置顶记录
-        let delete_count = count - max_items as i32;
+        let delete_count = i64::from(count - max_items);
         let mut stmt = self.conn.prepare(
             "SELECT id, item_type, file_path
              FROM clipboard_items
@@ -920,6 +920,16 @@ mod tests {
         assert!(user_file_path.exists());
         std::fs::remove_file(&user_file_path).ok();
         std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn limit_cleanup_keeps_items_when_limit_is_larger_than_current_count() {
+        let storage = memory_storage();
+        storage.save_clipboard_item("first").unwrap();
+        storage.save_clipboard_item("second").unwrap();
+
+        assert_eq!(storage.cleanup_old_items(u32::MAX).unwrap(), 0);
+        assert_eq!(storage.get_all_items().unwrap().len(), 2);
     }
 
     #[test]
