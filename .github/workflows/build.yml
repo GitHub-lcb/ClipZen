@@ -4,12 +4,10 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -60,11 +58,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'ClipZen ${{ github.ref_name }}'
-          releaseBody: 'See CHANGELOG.md for details.'
-          releaseDraft: true
-          prerelease: false
           args: ${{ matrix.args }}
 
       - name: Create Windows portable package

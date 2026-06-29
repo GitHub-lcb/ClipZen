@@ -51,10 +51,11 @@ function detectSensitive(content: string): SensitiveMatch[] {
           case "phone":
             masked = text.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
             break;
-          case "email":
+          case "email": {
             const [local, domain] = text.split("@");
             masked = local.slice(0, 2) + "***@" + domain;
             break;
+          }
           case "idcard":
             masked = text.replace(/(\d{4})\d{10}(\d{4})/, "$1**********$2");
             break;
@@ -128,6 +129,7 @@ function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const searchRequestRef = useRef(0);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(50);
   const ITEM_HEIGHT = 120;
@@ -151,7 +153,7 @@ function App() {
     const loadLicenseInfo = async () => {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        const info = await invoke<any>("get_license_info");
+        const info = await invoke<LicenseInfo | null>("get_license_info");
         if (info) {
           setIsPro(true);
           setLicenseInfo(info);
@@ -175,27 +177,43 @@ function App() {
 
   // 搜索处理
   const handleSearch = useCallback(async (query: string) => {
+    const requestId = ++searchRequestRef.current;
     setSearchLoading(true);
     try {
       const results = await invoke<ClipboardItem[]>("search_clipboard_history", {
         query
       });
-      setSearchedItems(results);
+      if (requestId === searchRequestRef.current) {
+        setSearchedItems(results);
+      }
     } catch (error) {
       console.error("Failed to search:", error);
-      setSearchedItems([]);
+      if (requestId === searchRequestRef.current) {
+        setSearchedItems([]);
+      }
     } finally {
-      setSearchLoading(false);
+      if (requestId === searchRequestRef.current) {
+        setSearchLoading(false);
+      }
     }
   }, []);
 
   // 监听搜索查询变化
   useEffect(() => {
-    if (searchQuery.trim()) {
-      handleSearch(searchQuery);
-    } else {
+    const query = searchQuery.trim();
+
+    if (!query) {
+      searchRequestRef.current += 1;
       setSearchedItems([]);
+      setSearchLoading(false);
+      return;
     }
+
+    const searchTimer = window.setTimeout(() => {
+      handleSearch(query);
+    }, 200);
+
+    return () => window.clearTimeout(searchTimer);
   }, [searchQuery, handleSearch]);
 
   const filteredItems = useMemo(() => {
@@ -214,16 +232,18 @@ function App() {
       switch (sortBy) {
         case "time":
           return (a.created_at - b.created_at) * multiplier;
-        case "type":
+        case "type": {
           const typeOrder = { image: 0, text: 1, files: 2 };
           const typeDiff = (typeOrder[a.item_type as keyof typeof typeOrder] ?? 1) - 
                           (typeOrder[b.item_type as keyof typeof typeOrder] ?? 1);
           return typeDiff !== 0 ? typeDiff * multiplier : (a.created_at - b.created_at) * -1;
-        case "content":
+        }
+        case "content": {
           const aContent = a.item_type === "image" ? "" : (a.preview || a.content).toLowerCase();
           const bContent = b.item_type === "image" ? "" : (b.preview || b.content).toLowerCase();
           return aContent.localeCompare(bContent, "zh-CN") * multiplier;
-        case "popularity":
+        }
+        case "popularity": {
           const aLastCopy = a.updated_at || a.created_at;
           const bLastCopy = b.updated_at || b.created_at;
           const copyTimeDiff = bLastCopy - aLastCopy;
@@ -232,6 +252,7 @@ function App() {
           const bCount = b.copy_count || 0;
           const countDiff = aCount - bCount;
           return countDiff !== 0 ? countDiff * multiplier : (a.created_at - b.created_at) * -1;
+        }
         default:
           return (a.created_at - b.created_at) * -1;
       }
@@ -313,6 +334,12 @@ function App() {
     setEndIndex(Math.min(recentItems.length, MAX_VISIBLE_ITEMS));
   }, [recentItems.length, searchQuery, selectedTag, sortBy, sortOrder]);
 
+  const handleCopyWithFeedback = useCallback(async (item: ClipboardItem) => {
+    await copyToClipboard(item);
+    setCopiedId(item.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }, [copyToClipboard]);
+
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -377,13 +404,7 @@ function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [allFilteredItems, selectedIndex, pinnedItems.length]);
-
-  const handleCopyWithFeedback = async (item: ClipboardItem) => {
-    await copyToClipboard(item);
-    setCopiedId(item.id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
+  }, [allFilteredItems, selectedIndex, pinnedItems.length, handleCopyWithFeedback]);
 
   const handleDeleteConfirm = async (id: string) => {
     await deleteItem(id);

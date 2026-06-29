@@ -70,8 +70,8 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
       } else {
         setError(result.message);
       }
-    } catch (err: any) {
-      setError('激活失败：' + err);
+    } catch (err: unknown) {
+      setError('激活失败：' + String(err));
     } finally {
       setIsLoading(false);
     }

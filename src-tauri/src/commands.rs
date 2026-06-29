@@ -1,7 +1,7 @@
 // Tauri 命令处理模块
 
 use crate::clipboard::{ClipboardManager, ClipboardContent};
-use crate::storage::{Storage, encrypt_data, decrypt_data};
+use crate::storage::Storage;
 use crate::settings::{SettingsManager, AppSettings, hash_password, verify_password_hash};
 use crate::license::{LicenseManager, LicenseInfo, LicenseType, ActivationResult};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -32,18 +32,9 @@ pub fn get_clipboard_history_paginated(
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    let all_items = storage.get_all_items().unwrap_or_default();
-    let total_count = all_items.len() as u32;
-    
-    // 计算分页
-    let start = (page - 1) * page_size;
-    let end = start + page_size;
-    let paginated_items: Vec<_> = all_items.into_iter()
-        .skip(start as usize)
-        .take(page_size as usize)
-        .collect();
-    
-    let mut items = paginated_items;
+    let (mut items, total_count) = storage
+        .get_items_paginated(page, page_size)
+        .unwrap_or_else(|_| (Vec::new(), 0));
     decrypt_sensitive_items(&mut items, &app_settings);
     
     (items, total_count)
@@ -471,10 +462,9 @@ pub fn search_clipboard_history(
         let query_lower = query.to_lowercase();
         let mut filtered_items: Vec<_> = items.into_iter()
             .filter(|item| {
-                item.item_type == "image" ||
-                item.content.to_lowercase().contains(&query_lower) ||
-                item.preview.to_lowercase().contains(&query_lower) ||
-                item.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+                item.content.to_lowercase().contains(&query_lower)
+                    || item.preview.to_lowercase().contains(&query_lower)
+                    || item.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
             })
             .collect();
         

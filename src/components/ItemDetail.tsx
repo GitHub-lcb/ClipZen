@@ -53,10 +53,11 @@ function detectSensitive(content: string): SensitiveMatch[] {
           case "phone":
             masked = text.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2");
             break;
-          case "email":
+          case "email": {
             const [local, domain] = text.split("@");
             masked = local.slice(0, 2) + "***@" + domain;
             break;
+          }
           case "idcard":
             masked = text.replace(/(\d{4})\d{10}(\d{4})/, "$1**********$2");
             break;
@@ -108,7 +109,7 @@ export function ItemDetail({
       };
       loadImage();
     }
-  }, [item.id, item.file_path, item.item_type]);
+  }, [item.content, item.file_path, item.item_type]);
 
   useEffect(() => {
     if (item.item_type === "text") {

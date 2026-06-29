@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings, X, Save, RotateCcw, Monitor, Moon, Sun, Globe, 
@@ -32,7 +32,7 @@ interface SettingsPanelProps {
   onRefresh?: () => void;
   onActivateLicense?: () => void;
   isPro?: boolean;
-  licenseInfo?: any;
+  licenseInfo?: { license_type: string } | null;
 }
 
 export function SettingsPanel({ 
@@ -48,20 +48,7 @@ export function SettingsPanel({
   const [clearing, setClearing] = useState(false);
   const [keepPinned, setKeepPinned] = useState(true);
 
-  useEffect(() => {
-    if (isOpen) loadSettings();
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const result = await invoke<AppSettings>("get_settings");
@@ -71,7 +58,20 @@ export function SettingsPanel({
       console.error("Failed to load settings:", error);
       setMessage({ type: 'error', text: t('settings.loadFailed') });
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (isOpen) loadSettings();
+  }, [isOpen, loadSettings]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const saveSettings = async () => {
     if (!settings) return;

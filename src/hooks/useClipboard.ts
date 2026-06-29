@@ -45,7 +45,7 @@ export function useClipboard() {
       }
       
       setTotalItems(total);
-      setHasMore(result.length === pageSize);
+      setHasMore(page * pageSize < total);
       setCurrentPage(page);
     } catch (error) {
       console.error("Failed to load clipboard history:", error);
@@ -60,13 +60,13 @@ export function useClipboard() {
 
   // 加载更多数据
   const loadMore = useCallback(() => {
-    if (!loading && hasMore) {
+    if (!loading && !loadingMore && hasMore) {
       setLoadingMore(true);
       loadItems(currentPage + 1, false).finally(() => {
         setLoadingMore(false);
       });
     }
-  }, [loading, hasMore, currentPage, loadItems]);
+  }, [loading, loadingMore, hasMore, currentPage, loadItems]);
 
   // 复制到剪贴板
   const copyToClipboard = useCallback(async (item: ClipboardItem) => {

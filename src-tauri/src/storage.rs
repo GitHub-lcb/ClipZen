@@ -6,11 +6,9 @@ use uuid::Uuid;
 use chrono::Utc;
 use std::path::PathBuf;
 use dirs::data_dir;
-use std::fs;
-use std::io::Write;
 
 // 加密相关导入
-use aes_gcm::{Aes256Gcm, KeyInit, aead::{Aead, Nonce}};
+use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm, Nonce};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -265,6 +263,55 @@ impl Storage {
         Ok(result)
     }
 
+    pub fn get_items_paginated(&self, page: u32, page_size: u32) -> Result<(Vec<ClipboardItem>, u32)> {
+        let total_count: u32 = self.conn.query_row(
+            "SELECT COUNT(*) FROM clipboard_items",
+            [],
+            |row| row.get(0),
+        )?;
+
+        let safe_page = page.max(1);
+        let safe_page_size = page_size.clamp(1, 200);
+        let offset = (safe_page - 1) * safe_page_size;
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0)
+             FROM clipboard_items
+             ORDER BY pinned DESC, created_at DESC
+             LIMIT ?1 OFFSET ?2"
+        )?;
+
+        let items = stmt.query_map(
+            [safe_page_size as i64, offset as i64],
+            |row| {
+                let tags_str: String = row.get(8)?;
+                let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
+                let updated_at: Option<i64> = row.get(9).ok();
+
+                Ok(ClipboardItem {
+                    id: row.get(0)?,
+                    item_type: row.get(1)?,
+                    content: row.get(2)?,
+                    preview: row.get(3)?,
+                    pinned: row.get::<_, i32>(4)? == 1,
+                    protected: row.get::<_, i32>(5)? == 1,
+                    created_at: row.get(6)?,
+                    file_path: row.get(7)?,
+                    updated_at,
+                    tags,
+                    copy_count: row.get(10)?,
+                })
+            },
+        )?;
+
+        let mut result = Vec::new();
+        for item in items {
+            result.push(item?);
+        }
+
+        Ok((result, total_count))
+    }
+
     /// 获取排序后的记录
     pub fn get_items_sorted(&self, sort_by: &str, sort_order: &str) -> Result<Vec<ClipboardItem>> {
         let order_clause = match (sort_by, sort_order) {
@@ -433,21 +480,49 @@ impl Storage {
 
 /// 检测敏感信息
 pub fn contains_sensitive_info(content: &str) -> bool {
-    // 检测手机号
-    if content.contains(r#"1[3-9]\d{9}"#) {
-        return true;
-    }
-    // 检测邮箱
-    if content.contains(r#"[\w.-]+@[\w.-]+\.\w+"#) {
-        return true;
-    }
-    // 检测身份证号
-    if content.contains(r#"\d{17}[\dXx]"#) {
-        return true;
-    }
-    // 检测银行卡号
-    if content.contains(r#"\b\d{16,19}\b"#) {
-        return true;
+    contains_phone_number(content)
+        || contains_email(content)
+        || contains_id_card(content)
+        || contains_bank_card(content)
+}
+
+fn contains_phone_number(content: &str) -> bool {
+    content.as_bytes().windows(11).any(|window| {
+        window[0] == b'1'
+            && (b'3'..=b'9').contains(&window[1])
+            && window.iter().all(u8::is_ascii_digit)
+    })
+}
+
+fn contains_email(content: &str) -> bool {
+    content.split_whitespace().any(|part| {
+        let Some((local, domain)) = part.split_once('@') else {
+            return false;
+        };
+        !local.is_empty()
+            && domain.contains('.')
+            && domain.split('.').all(|segment| !segment.is_empty())
+    })
+}
+
+fn contains_id_card(content: &str) -> bool {
+    content.as_bytes().windows(18).any(|window| {
+        window[..17].iter().all(u8::is_ascii_digit)
+            && (window[17].is_ascii_digit() || matches!(window[17], b'X' | b'x'))
+    })
+}
+
+fn contains_bank_card(content: &str) -> bool {
+    let mut run_len = 0;
+    for byte in content.bytes() {
+        if byte.is_ascii_digit() {
+            run_len += 1;
+            if (16..=19).contains(&run_len) {
+                return true;
+            }
+        } else {
+            run_len = 0;
+        }
     }
     false
 }
@@ -541,26 +616,73 @@ pub fn generate_encryption_key() -> Vec<u8> {
 
 /// 加密数据
 pub fn encrypt_data(data: &str, key: &[u8]) -> Result<String, String> {
+    use rand::RngCore;
+
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-    let nonce = Nonce::<Aes256Gcm>::from_slice(&[0; 12]); // 12-byte nonce
+    let mut nonce_bytes = [0u8; 12];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
     
     let ciphertext = cipher.encrypt(nonce, data.as_bytes())
         .map_err(|e| format!("Failed to encrypt: {}", e))?;
     
-    Ok(STANDARD.encode(ciphertext))
+    let mut payload = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
+    payload.extend_from_slice(&nonce_bytes);
+    payload.extend_from_slice(&ciphertext);
+
+    Ok(STANDARD.encode(payload))
 }
 
 /// 解密数据
 pub fn decrypt_data(encrypted: &str, key: &[u8]) -> Result<String, String> {
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Failed to create cipher: {}", e))?;
-    let nonce = Nonce::<Aes256Gcm>::from_slice(&[0; 12]); // 12-byte nonce
-    
-    let ciphertext = STANDARD.decode(encrypted)
+
+    let payload = STANDARD.decode(encrypted)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
-    
-    let plaintext = cipher.decrypt(nonce, &ciphertext[..])
+
+    if payload.len() > 12 {
+        let (nonce_bytes, ciphertext) = payload.split_at(12);
+        let nonce = Nonce::from_slice(nonce_bytes);
+        if let Ok(plaintext) = cipher.decrypt(nonce, ciphertext) {
+            return String::from_utf8(plaintext)
+                .map_err(|e| format!("Failed to convert to string: {}", e));
+        }
+    }
+
+    let legacy_nonce_bytes = [0u8; 12];
+    let legacy_nonce = Nonce::from_slice(&legacy_nonce_bytes);
+    let plaintext = cipher.decrypt(legacy_nonce, &payload[..])
         .map_err(|e| format!("Failed to decrypt: {}", e))?;
-    
+
     String::from_utf8(plaintext)
         .map_err(|e| format!("Failed to convert to string: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{contains_sensitive_info, decrypt_data, encrypt_data, generate_encryption_key};
+
+    #[test]
+    fn detects_sensitive_phone_email_id_card_and_bank_card() {
+        assert!(contains_sensitive_info("联系 13800138000"));
+        assert!(contains_sensitive_info("user@example.com"));
+        assert!(contains_sensitive_info("11010519491231002X"));
+        assert!(contains_sensitive_info("6222021234567890123"));
+    }
+
+    #[test]
+    fn ignores_regular_clipboard_text() {
+        assert!(!contains_sensitive_info("普通剪贴板内容，没有敏感信息"));
+    }
+
+    #[test]
+    fn encrypt_data_uses_unique_payloads_and_round_trips() {
+        let key = generate_encryption_key();
+        let first = encrypt_data("secret", &key).unwrap();
+        let second = encrypt_data("secret", &key).unwrap();
+
+        assert_ne!(first, second);
+        assert_eq!(decrypt_data(&first, &key).unwrap(), "secret");
+        assert_eq!(decrypt_data(&second, &key).unwrap(), "secret");
+    }
 }
