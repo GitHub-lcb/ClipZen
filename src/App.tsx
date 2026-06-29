@@ -1043,7 +1043,7 @@ function App() {
                 </TooltipTrigger>
                 <TooltipContent>{t('keyboard.bottom')}</TooltipContent>
               </Tooltip>
-              <span className="text-xs text-muted-foreground">
+              <span className="hidden sm:inline text-xs text-muted-foreground">
                 {t('keyboard.navigate')} {t('keyboard.copy')} {t('keyboard.delete')}
               </span>
             </div>
