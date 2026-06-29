@@ -24,6 +24,10 @@ dist-ssr
 *.sw?
 .trae/
 
+# Local agent tooling
+.agents/
+~/
+
 # Tauri
 src-tauri/target
 src-tauri/clipzen.db
