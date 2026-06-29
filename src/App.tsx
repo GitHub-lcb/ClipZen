@@ -133,11 +133,6 @@ function App() {
     }
   }, []);
 
-  const handleDataRefresh = useCallback(() => {
-    void refresh();
-    void refreshGlobalTags();
-  }, [refresh, refreshGlobalTags]);
-
   useEffect(() => {
     const loadFeatureSettings = async () => {
       try {
@@ -196,6 +191,20 @@ function App() {
       }
     }
   }, []);
+
+  const handleDataRefresh = useCallback(() => {
+    const query = searchQuery.trim();
+    void refresh();
+    void refreshGlobalTags();
+
+    if (query) {
+      void handleSearch(query);
+    } else {
+      searchRequestRef.current += 1;
+      setSearchedItems([]);
+      setSearchedQuery("");
+    }
+  }, [handleSearch, refresh, refreshGlobalTags, searchQuery]);
 
   // 监听搜索查询变化
   useEffect(() => {
