@@ -597,6 +597,10 @@ impl Storage {
     }
 
     pub fn update_item_content(&self, id: &str, content: &str) -> Result<()> {
+        if content.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         let preview: String = content.chars().take(100).collect();
         self.conn.execute(
             "UPDATE clipboard_items
@@ -1227,6 +1231,18 @@ mod tests {
         storage.update_item_content(&id, "edited content").unwrap();
 
         assert!(!storage.hash_exists("old-hash").unwrap());
+    }
+
+    #[test]
+    fn updating_item_content_rejects_blank_text() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("original").unwrap();
+
+        assert!(storage.update_item_content(&id, "  \n\t").is_err());
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert_eq!(item.content, "original");
+        assert_eq!(item.preview, "original");
     }
 
     #[test]
