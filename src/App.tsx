@@ -466,17 +466,22 @@ function App() {
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, allFilteredItemsRef.current.length - 1));
+        const itemCount = allFilteredItemsRef.current.length;
+        setSelectedIndex(prev => (itemCount === 0 ? -1 : Math.min(prev + 1, itemCount - 1)));
         return;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
+        const itemCount = allFilteredItemsRef.current.length;
+        setSelectedIndex(prev => (itemCount === 0 ? -1 : Math.max(prev - 1, 0)));
         return;
       }
       if (e.key === 'Home') {
         e.preventDefault();
-        setSelectedIndex(pinnedItemsLengthRef.current);
+        const itemCount = allFilteredItemsRef.current.length;
+        setSelectedIndex(
+          itemCount === 0 ? -1 : Math.min(pinnedItemsLengthRef.current, itemCount - 1)
+        );
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
         }
