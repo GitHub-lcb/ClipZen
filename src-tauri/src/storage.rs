@@ -530,7 +530,9 @@ impl Storage {
     pub fn update_item_content(&self, id: &str, content: &str) -> Result<()> {
         let preview: String = content.chars().take(100).collect();
         self.conn.execute(
-            "UPDATE clipboard_items SET content = ?1, preview = ?2, updated_at = ?3 WHERE id = ?4",
+            "UPDATE clipboard_items
+             SET content = ?1, preview = ?2, updated_at = ?3, content_hash = NULL
+             WHERE id = ?4",
             params![content, preview, Utc::now().timestamp_millis(), id],
         )?;
         Ok(())
@@ -996,6 +998,18 @@ mod tests {
         storage.remove_tag_from_item(&id, "work").unwrap();
         let item = storage.get_item_by_id(&id).unwrap().unwrap();
         assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn updating_item_content_clears_stale_content_hash() {
+        let storage = memory_storage();
+        let id = storage
+            .save_clipboard_item_with_hash("encrypted original", Some("old-hash"))
+            .unwrap();
+
+        storage.update_item_content(&id, "edited content").unwrap();
+
+        assert!(!storage.hash_exists("old-hash").unwrap());
     }
 
     #[test]
