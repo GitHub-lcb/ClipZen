@@ -919,11 +919,18 @@ function App() {
                       
                       {item.item_type === "image" ? (
                         <div className="relative w-full h-full min-h-[80px]">
-                          <img 
-                            src={item.preview} 
-                            alt={t('image.label')}
-                            className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300" 
-                          />
+                          {isProtected ? (
+                            <div className="flex h-full min-h-[80px] flex-col items-center justify-center gap-1 bg-primary/5 p-3">
+                              <Lock className="w-4 h-4 text-amber-500" />
+                              <span className="text-xs font-medium text-muted-foreground">****</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={item.preview}
+                              alt={t('image.label')}
+                              className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300"
+                            />
+                          )}
                         </div>
                       ) : item.item_type === "files" ? (
                         <div className="flex flex-col items-center justify-center w-full h-full p-3 min-h-[80px]">
@@ -1069,11 +1076,17 @@ function App() {
                           {item.item_type === "image" ? (
                             <div className="flex items-center gap-3">
                               <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border">
-                                <img
-                                  src={item.preview}
-                                  alt={t('image.label')}
-                                  className="w-full h-full object-cover"
-                                />
+                                {isProtected ? (
+                                  <div className="flex h-full w-full items-center justify-center bg-primary/5">
+                                    <Lock className="w-5 h-5 text-amber-500" />
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={item.preview}
+                                    alt={t('image.label')}
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
                               </div>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock className="w-3 h-3" />

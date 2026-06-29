@@ -48,7 +48,10 @@ export function ItemDetail({
   const [isMasked, setIsMasked] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tags, setTags] = useState<string[]>(item.tags || []);
-  const [isProtected, setIsProtected] = useState(item.protected || false);
+  const [protectedState, setProtectedState] = useState({
+    itemId: item.id,
+    value: item.protected || false,
+  });
   const [showProtectedContent, setShowProtectedContent] = useState(initialUnlocked);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordDialogMode, setPasswordDialogMode] = useState<"set" | "verify">("set");
@@ -58,6 +61,9 @@ export function ItemDetail({
   const [copySuccess, setCopySuccess] = useState(false);
   const [loadedImage, setLoadedImage] = useState<{ key: string; data: string } | null>(null);
   const copySuccessTimeoutRef = useRef<number | null>(null);
+  const isProtected =
+    protectedState.itemId === item.id ? protectedState.value : item.protected || false;
+  const contentLocked = enablePasswordProtection && isProtected && !showProtectedContent;
 
   const showCopySuccess = useCallback(() => {
     if (copySuccessTimeoutRef.current !== null) {
@@ -82,7 +88,7 @@ export function ItemDetail({
   useEffect(() => {
     setLoadedImage(null);
 
-    if (item.item_type !== "image" || !item.file_path) {
+    if (contentLocked || item.item_type !== "image" || !item.file_path) {
       return;
     }
 
@@ -105,7 +111,7 @@ export function ItemDetail({
     return () => {
       cancelled = true;
     };
-  }, [item.id, item.content, item.file_path, item.item_type, item.preview]);
+  }, [contentLocked, item.id, item.content, item.file_path, item.item_type, item.preview]);
 
   useEffect(() => {
     const checkGlobalPassword = async () => {
@@ -131,7 +137,6 @@ export function ItemDetail({
     setIsMasked(false);
   }, [item.id, item.content]);
 
-  const contentLocked = enablePasswordProtection && isProtected && !showProtectedContent;
   const sensitiveMatches = useMemo(
     () => (contentLocked || item.item_type !== "text" ? [] : detectSensitive(content)),
     [content, contentLocked, item.item_type]
@@ -146,7 +151,7 @@ export function ItemDetail({
     loadedImage?.key === imageKey ? loadedImage.data : item.preview || item.content;
 
   useEffect(() => {
-    setIsProtected(item.protected || false);
+    setProtectedState({ itemId: item.id, value: item.protected || false });
     setShowProtectedContent(initialUnlocked);
   }, [initialUnlocked, item.id, item.content, item.protected]);
 
@@ -197,7 +202,7 @@ export function ItemDetail({
 
   const handleToggleProtected = async () => {
     await invoke("toggle_protected", { id: item.id });
-    setIsProtected(!isProtected);
+    setProtectedState({ itemId: item.id, value: !isProtected });
     onUpdate();
   };
 
