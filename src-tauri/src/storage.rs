@@ -282,8 +282,13 @@ impl Storage {
 
     /// 保存文件路径列表
     pub fn save_files_item(&self, file_paths: &[String]) -> Result<String> {
-        let id = Uuid::new_v4().to_string();
         let content = file_paths.join("\n");
+        if let Some(existing_id) = self.get_file_item_id_by_content(&content)? {
+            self.update_item_timestamp_by_id(&existing_id)?;
+            return Ok(existing_id);
+        }
+
+        let id = Uuid::new_v4().to_string();
         
         // 生成预览：显示文件名列表
         let preview: String = file_paths
@@ -531,15 +536,6 @@ impl Storage {
         Ok(())
     }
 
-    /// 检查内容是否已存在
-    pub fn content_exists(&self, content: &str) -> Result<bool> {
-        let mut stmt = self.conn.prepare(
-            "SELECT COUNT(*) FROM clipboard_items WHERE content = ?1"
-        )?;
-        let count: i32 = stmt.query_row([content], |row| row.get(0))?;
-        Ok(count > 0)
-    }
-
     /// 查找未加密的相同文本记录（用于普通文本去重）
     fn get_text_item_id_by_content(&self, content: &str) -> Result<Option<String>> {
         self.conn
@@ -548,6 +544,20 @@ impl Storage {
                  WHERE item_type = 'text'
                    AND content = ?1
                    AND content_hash IS NULL
+                 LIMIT 1",
+                [content],
+                |row| row.get(0),
+            )
+            .optional()
+    }
+
+    /// 查找相同文件列表记录（用于文件路径列表去重）
+    fn get_file_item_id_by_content(&self, content: &str) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT id FROM clipboard_items
+                 WHERE item_type = 'files'
+                   AND content = ?1
                  LIMIT 1",
                 [content],
                 |row| row.get(0),
@@ -927,6 +937,24 @@ mod tests {
         assert_eq!(second_id, first_id);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, "same text");
+    }
+
+    #[test]
+    fn saving_existing_file_list_refreshes_instead_of_duplicating() {
+        let storage = memory_storage();
+        let files = vec![
+            "C:\\Users\\clip\\one.txt".to_string(),
+            "C:\\Users\\clip\\two.txt".to_string(),
+        ];
+        let first_id = storage.save_files_item(&files).unwrap();
+
+        let second_id = storage.save_files_item(&files).unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].item_type, "files");
+        assert_eq!(items[0].content, files.join("\n"));
     }
 
     #[test]

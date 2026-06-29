@@ -197,22 +197,14 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
             }
             crate::clipboard::ClipboardContent::Files(file_paths) => {
                 // 计算文件列表哈希以检测重复
-                use std::collections::hash_map::DefaultHasher;
-                use std::hash::{Hash, Hasher};
-                let mut hasher = DefaultHasher::new();
-                file_paths.hash(&mut hasher);
-                let hash = hasher.finish();
-                
-                if last_files_hash != Some(hash) {
-                    last_files_hash = Some(hash);
-                    
-                    let content = file_paths.join("\n");
-                    if !storage.content_exists(&content).unwrap_or(false) {
-                        let _ = storage.save_files_item(&file_paths);
-                        let max_items = settings.load().max_history_items;
-                        let _ = storage.cleanup_old_items(max_items);
-                        let _ = handle.emit("clipboard-updated", ());
-                    }
+                let app_settings = settings.load();
+                if save_detected_files_item(
+                    &storage,
+                    &app_settings,
+                    &file_paths,
+                    &mut last_files_hash,
+                ) {
+                    let _ = handle.emit("clipboard-updated", ());
                 }
             }
             crate::clipboard::ClipboardContent::Empty => {}
@@ -257,6 +249,32 @@ fn save_detected_text_item(
     true
 }
 
+fn save_detected_files_item(
+    storage: &Storage,
+    app_settings: &settings::AppSettings,
+    file_paths: &[String],
+    last_files_hash: &mut Option<u64>,
+) -> bool {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    file_paths.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    if *last_files_hash == Some(hash) {
+        return false;
+    }
+
+    if storage.save_files_item(file_paths).is_err() {
+        return false;
+    }
+
+    *last_files_hash = Some(hash);
+    let _ = storage.cleanup_old_items(app_settings.max_history_items);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,5 +309,41 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, "repeat me");
+    }
+
+    #[test]
+    fn listener_files_save_refreshes_existing_item_after_other_clipboard_content() {
+        let storage = memory_storage();
+        let settings = settings::AppSettings::default();
+        let files = vec![
+            "C:\\Users\\clip\\one.txt".to_string(),
+            "C:\\Users\\clip\\two.txt".to_string(),
+        ];
+        let other_files = vec!["C:\\Users\\clip\\other.txt".to_string()];
+        let mut last_files_hash = None;
+
+        assert!(save_detected_files_item(
+            &storage,
+            &settings,
+            &files,
+            &mut last_files_hash
+        ));
+        assert!(save_detected_files_item(
+            &storage,
+            &settings,
+            &other_files,
+            &mut last_files_hash
+        ));
+
+        assert!(save_detected_files_item(
+            &storage,
+            &settings,
+            &files,
+            &mut last_files_hash
+        ));
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].content, files.join("\n"));
     }
 }
