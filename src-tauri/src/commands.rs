@@ -332,6 +332,13 @@ pub fn import_history(
     Ok(count)
 }
 
+fn should_clear_history_item(item: &crate::storage::ClipboardItem, keep_pinned: bool) -> bool {
+    if keep_pinned && (item.pinned || !item.tags.is_empty()) {
+        return false;
+    }
+    true
+}
+
 /// 清空所有剪贴板历史
 #[tauri::command]
 pub fn clear_all_history(
@@ -344,10 +351,7 @@ pub fn clear_all_history(
     let mut deleted = 0;
     for item in items {
         // 保留置顶记录和带标签的记录
-        if keep_pinned && item.pinned {
-            continue;
-        }
-        if !item.tags.is_empty() {
+        if !should_clear_history_item(&item, keep_pinned) {
             continue;
         }
         // 删除文件（如果是图片）
@@ -629,5 +633,26 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].content, "secret-user@example.com");
+    }
+
+    #[test]
+    fn clear_history_removes_tagged_items_when_keep_pinned_is_disabled() {
+        let mut tagged = text_item("tagged", "content".to_string(), "content".to_string());
+        tagged.tags = vec!["work".to_string()];
+
+        assert!(should_clear_history_item(&tagged, false));
+    }
+
+    #[test]
+    fn clear_history_keeps_pinned_and_tagged_items_when_requested() {
+        let mut pinned = text_item("pinned", "content".to_string(), "content".to_string());
+        pinned.pinned = true;
+        let mut tagged = text_item("tagged", "content".to_string(), "content".to_string());
+        tagged.tags = vec!["work".to_string()];
+        let plain = text_item("plain", "content".to_string(), "content".to_string());
+
+        assert!(!should_clear_history_item(&pinned, true));
+        assert!(!should_clear_history_item(&tagged, true));
+        assert!(should_clear_history_item(&plain, true));
     }
 }

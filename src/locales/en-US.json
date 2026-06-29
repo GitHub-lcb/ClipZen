@@ -89,8 +89,8 @@
     "importSuccess": "Imported {n} records",
     "importFailed": "Import failed",
     "clear": "Clear Data",
-    "clearHint": "Delete all clipboard history",
-    "keepPinned": "Keep pinned records",
+    "clearHint": "Delete clipboard history; pinned and tagged records are kept when enabled",
+    "keepPinned": "Keep pinned and tagged records",
     "clearing": "Clearing...",
     "clearSuccess": "Deleted {n} records",
     "clearFailed": "Clear failed"
