@@ -85,13 +85,14 @@ pub fn save_to_history(
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
+    let should_encrypt = crate::storage::contains_sensitive_info(&content);
     let mut processed_content = content;
     
     // 检测并加密敏感信息
-    if crate::storage::contains_sensitive_info(&content) {
+    if should_encrypt {
         if let Some(encryption_key_str) = &app_settings.encryption_key {
             if let Ok(encryption_key) = STANDARD.decode(encryption_key_str) {
-                if let Ok(encrypted) = crate::storage::encrypt_data(&content, &encryption_key) {
+                if let Ok(encrypted) = crate::storage::encrypt_data(&processed_content, &encryption_key) {
                     processed_content = format!("ENCRYPTED:{}", encrypted);
                 }
             }
@@ -458,7 +459,7 @@ pub fn search_clipboard_history(
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    if let Ok(mut items) = storage.get_all_items() {
+    if let Ok(items) = storage.get_all_items() {
         let query_lower = query.to_lowercase();
         let mut filtered_items: Vec<_> = items.into_iter()
             .filter(|item| {

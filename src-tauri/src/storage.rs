@@ -143,7 +143,7 @@ impl Storage {
     }
 
     /// 保存图片剪贴板
-    pub fn save_image_item(&self, image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
+    pub fn save_image_item(&self, _image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
         let id = Uuid::new_v4().to_string();
         
         self.conn.execute(
@@ -568,41 +568,6 @@ pub fn base64_encode(data: &[u8]) -> String {
         i += 3;
     }
     result
-}
-
-/// 简单的 base64 解码
-pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
-    const DECODE_TABLE: [i8; 128] = [
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
-        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
-        -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
-        -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
-    ];
-    
-    let input = input.trim_end_matches('=');
-    let mut result = Vec::new();
-    let mut buf = 0u32;
-    let mut bits = 0;
-    
-    for c in input.chars() {
-        let val = if c.is_ascii() { DECODE_TABLE[c as usize] } else { -1 };
-        if val < 0 {
-            return Err("Invalid base64 character".to_string());
-        }
-        buf = (buf << 6) | (val as u32);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            result.push((buf >> bits) as u8);
-            buf &= (1 << bits) - 1;
-        }
-    }
-    
-    Ok(result)
 }
 
 /// 生成加密密钥

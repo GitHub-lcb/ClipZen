@@ -59,7 +59,7 @@ impl SettingsManager {
 
     pub fn load(&self) -> AppSettings {
         if let Ok(content) = fs::read_to_string(&self.config_path) {
-            let mut settings = serde_json::from_str(&content).unwrap_or_default();
+            let mut settings: AppSettings = serde_json::from_str(&content).unwrap_or_default();
             // 如果没有加密密钥，生成一个新的
             if settings.encryption_key.is_none() {
                 use base64::{Engine as _, engine::general_purpose::STANDARD};
