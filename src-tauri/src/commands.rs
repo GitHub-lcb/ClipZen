@@ -251,6 +251,19 @@ pub fn get_settings(settings: State<Arc<Mutex<SettingsManager>>>) -> AppSettings
     settings.load()
 }
 
+fn merge_settings_for_save(
+    mut new_settings: AppSettings,
+    existing_settings: &AppSettings,
+) -> AppSettings {
+    if new_settings.global_password.is_none() {
+        new_settings.global_password = existing_settings.global_password.clone();
+    }
+    if new_settings.encryption_key.is_none() {
+        new_settings.encryption_key = existing_settings.encryption_key.clone();
+    }
+    new_settings
+}
+
 /// 保存设置
 #[tauri::command]
 pub fn save_settings(
@@ -260,6 +273,8 @@ pub fn save_settings(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let settings = settings.lock().unwrap();
+    let existing_settings = settings.load();
+    let new_settings = merge_settings_for_save(new_settings, &existing_settings);
     settings.save(&new_settings)?;
     drop(settings);
     
@@ -654,5 +669,26 @@ mod tests {
         assert!(!should_clear_history_item(&pinned, true));
         assert!(!should_clear_history_item(&tagged, true));
         assert!(should_clear_history_item(&plain, true));
+    }
+
+    #[test]
+    fn save_settings_preserves_existing_secret_fields_when_omitted() {
+        let existing = AppSettings {
+            global_password: Some("password-hash".to_string()),
+            encryption_key: Some("encryption-key".to_string()),
+            ..AppSettings::default()
+        };
+        let incoming = AppSettings {
+            theme: "dark".to_string(),
+            global_password: None,
+            encryption_key: None,
+            ..AppSettings::default()
+        };
+
+        let merged = merge_settings_for_save(incoming, &existing);
+
+        assert_eq!(merged.theme, "dark");
+        assert_eq!(merged.global_password, Some("password-hash".to_string()));
+        assert_eq!(merged.encryption_key, Some("encryption-key".to_string()));
     }
 }
