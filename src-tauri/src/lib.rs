@@ -151,32 +151,7 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
         match content {
             crate::clipboard::ClipboardContent::Text(text) => {
                 let app_settings = settings.load();
-                let processed_text = crate::storage::protect_sensitive_content(
-                    &text,
-                    app_settings.encryption_key.as_deref(),
-                );
-                let content_hash = crate::storage::sensitive_content_hash(
-                    &text,
-                    app_settings.encryption_key.as_deref(),
-                );
-                let content_exists = if let Some(hash) = content_hash.as_deref() {
-                    storage.hash_exists(hash).unwrap_or(false)
-                } else {
-                    storage.content_exists(&text).unwrap_or(false)
-                };
-
-                if text != last_text 
-                    && !text.trim().is_empty()
-                    && !content_exists
-                {
-                    last_text = text.clone();
-                    if let Some(hash) = content_hash.as_deref() {
-                        let _ = storage.save_clipboard_item_with_hash(&processed_text, Some(hash));
-                    } else {
-                        let _ = storage.save_clipboard_item(&processed_text);
-                    }
-                    let max_items = app_settings.max_history_items;
-                    let _ = storage.cleanup_old_items(max_items);
+                if save_detected_text_item(&storage, &app_settings, &text, &mut last_text) {
                     let _ = handle.emit("clipboard-updated", ());
                 }
             }
@@ -242,5 +217,79 @@ fn start_clipboard_listener<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
             }
             crate::clipboard::ClipboardContent::Empty => {}
         }
+    }
+}
+
+fn save_detected_text_item(
+    storage: &Storage,
+    app_settings: &settings::AppSettings,
+    text: &str,
+    last_text: &mut String,
+) -> bool {
+    if text == last_text || text.trim().is_empty() {
+        return false;
+    }
+
+    let processed_text = crate::storage::protect_sensitive_content(
+        text,
+        app_settings.encryption_key.as_deref(),
+    );
+    let content_hash = crate::storage::sensitive_content_hash(
+        text,
+        app_settings.encryption_key.as_deref(),
+    );
+
+    if let Some(hash) = content_hash.as_deref() {
+        if storage
+            .save_clipboard_item_with_hash(&processed_text, Some(hash))
+            .is_err()
+        {
+            return false;
+        }
+    } else {
+        if storage.save_clipboard_item(&processed_text).is_err() {
+            return false;
+        }
+    }
+
+    *last_text = text.to_string();
+    let _ = storage.cleanup_old_items(app_settings.max_history_items);
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    fn memory_storage() -> Storage {
+        Storage::from_connection(Connection::open_in_memory().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn listener_text_save_refreshes_existing_item_after_other_clipboard_content() {
+        let storage = memory_storage();
+        let settings = settings::AppSettings::default();
+        let mut last_text = String::new();
+
+        assert!(save_detected_text_item(
+            &storage,
+            &settings,
+            "repeat me",
+            &mut last_text
+        ));
+
+        last_text = "other clipboard content".to_string();
+
+        assert!(save_detected_text_item(
+            &storage,
+            &settings,
+            "repeat me",
+            &mut last_text
+        ));
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].content, "repeat me");
     }
 }

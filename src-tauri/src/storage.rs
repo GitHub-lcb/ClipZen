@@ -69,7 +69,7 @@ impl Storage {
         Self::from_connection(conn)
     }
 
-    fn from_connection(conn: Connection) -> Result<Self> {
+    pub(crate) fn from_connection(conn: Connection) -> Result<Self> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS clipboard_items (
                 id TEXT PRIMARY KEY,
