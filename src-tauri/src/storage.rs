@@ -325,7 +325,7 @@ impl Storage {
 
         let safe_page = page.max(1);
         let safe_page_size = page_size.clamp(1, 200);
-        let offset = (safe_page - 1) * safe_page_size;
+        let offset = u64::from(safe_page - 1) * u64::from(safe_page_size);
 
         let mut stmt = self.conn.prepare(
             "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0)
@@ -334,7 +334,7 @@ impl Storage {
              LIMIT ?1 OFFSET ?2"
         )?;
 
-        let items = stmt.query_map([safe_page_size as i64, offset as i64], clipboard_item_from_row)?;
+        let items = stmt.query_map([i64::from(safe_page_size), offset as i64], clipboard_item_from_row)?;
 
         let mut result = Vec::new();
         for item in items {
@@ -902,6 +902,17 @@ mod tests {
         ).unwrap();
 
         assert_eq!(storage.get_all_tags().unwrap(), vec!["clip", "later", "work"]);
+    }
+
+    #[test]
+    fn pagination_handles_extremely_large_page_numbers_without_overflow() {
+        let storage = memory_storage();
+        storage.save_clipboard_item("content").unwrap();
+
+        let (items, total_count) = storage.get_items_paginated(u32::MAX, 200).unwrap();
+
+        assert!(items.is_empty());
+        assert_eq!(total_count, 1);
     }
 
     #[test]
