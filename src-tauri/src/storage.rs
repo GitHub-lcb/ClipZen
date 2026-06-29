@@ -365,8 +365,10 @@ impl Storage {
     /// 增加复制次数
     pub fn increment_copy_count(&self, id: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE clipboard_items SET copy_count = COALESCE(copy_count, 0) + 1 WHERE id = ?1",
-            [id],
+            "UPDATE clipboard_items
+             SET copy_count = COALESCE(copy_count, 0) + 1, updated_at = ?1
+             WHERE id = ?2",
+            params![Utc::now().timestamp_millis(), id],
         )?;
         Ok(())
     }
@@ -730,6 +732,19 @@ mod tests {
         storage.remove_tag_from_item(&id, "work").unwrap();
         let item = storage.get_item_by_id(&id).unwrap().unwrap();
         assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn increment_copy_count_updates_last_copy_time() {
+        let storage = memory_storage();
+        let id = storage.save_clipboard_item("copy me").unwrap();
+
+        storage.increment_copy_count(&id).unwrap();
+
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+        assert_eq!(item.copy_count, 1);
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
     }
 
     #[test]
