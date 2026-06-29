@@ -52,7 +52,9 @@ interface SensitiveMatch {
 function detectSensitive(content: string): SensitiveMatch[] {
   const matches: SensitiveMatch[] = [];
   for (const { pattern, type } of SENSITIVE_PATTERNS) {
+    pattern.lastIndex = 0;
     const found = content.match(pattern);
+    pattern.lastIndex = 0;
     if (found) {
       for (const text of found) {
         let masked: string;
@@ -90,7 +92,14 @@ function getMaskedContent(content: string): string {
 }
 
 function hasSensitiveInfo(content: string): boolean {
-  return detectSensitive(content).length > 0;
+  for (const { pattern } of SENSITIVE_PATTERNS) {
+    pattern.lastIndex = 0;
+    const found = pattern.test(content);
+    pattern.lastIndex = 0;
+    if (found) return true;
+  }
+
+  return false;
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
