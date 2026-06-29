@@ -83,7 +83,7 @@ export function TagManager({
   );
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
       <AnimatePresence>
         {currentTags.map(tag => (
           <motion.span 
