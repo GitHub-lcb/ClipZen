@@ -588,17 +588,19 @@ impl Storage {
 
     /// 更新已存在记录的时间戳（用于去重时提升到顶部）
     fn update_item_timestamp_by_id(&self, id: &str) -> Result<()> {
+        let timestamp = Utc::now().timestamp_millis();
         self.conn.execute(
-            "UPDATE clipboard_items SET created_at = ?1 WHERE id = ?2",
-            [Utc::now().timestamp_millis().to_string(), id.to_string()],
+            "UPDATE clipboard_items SET created_at = ?1, updated_at = ?1 WHERE id = ?2",
+            params![timestamp, id],
         )?;
         Ok(())
     }
 
     pub fn update_item_timestamp_by_hash(&self, hash: &str) -> Result<()> {
+        let timestamp = Utc::now().timestamp_millis();
         self.conn.execute(
-            "UPDATE clipboard_items SET created_at = ?1 WHERE content_hash = ?2",
-            [Utc::now().timestamp_millis().to_string(), hash.to_string()],
+            "UPDATE clipboard_items SET created_at = ?1, updated_at = ?1 WHERE content_hash = ?2",
+            params![timestamp, hash],
         )?;
         Ok(())
     }
@@ -939,6 +941,24 @@ mod tests {
         assert_eq!(second_id, first_id);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, "same text");
+    }
+
+    #[test]
+    fn refreshing_existing_plain_text_keeps_updated_at_current() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at)
+             VALUES ('existing', 'text', 'same text', 'same text', 0, 0, 1000, '', '[]', 1000)",
+            [],
+        ).unwrap();
+
+        let id = storage.save_clipboard_item("same text").unwrap();
+        let item = storage.get_item_by_id(&id).unwrap().unwrap();
+
+        assert_eq!(id, "existing");
+        assert!(item.updated_at.is_some());
+        assert!(item.updated_at.unwrap() >= item.created_at);
     }
 
     #[test]
