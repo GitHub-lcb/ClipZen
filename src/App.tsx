@@ -333,10 +333,31 @@ function App() {
     if (selectedIndex < 0 || selectedIndex >= allFilteredItems.length) return;
     const item = allFilteredItems[selectedIndex];
     if (!item) return;
-    const element = itemRefs.current.get(item.id);
-    if (!element || !scrollContainerRef.current) return;
 
     const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const element = itemRefs.current.get(item.id);
+    if (!element) {
+      const recentIndex = selectedIndex - pinnedItems.length;
+      if (recentIndex < 0) return;
+
+      const targetTop = recentIndex * ITEM_HEIGHT;
+      const targetBottom = targetTop + ITEM_HEIGHT;
+      const viewportTop = container.scrollTop;
+      const viewportBottom = viewportTop + container.clientHeight;
+
+      if (targetTop < viewportTop) {
+        container.scrollTo({ top: targetTop, behavior: 'smooth' });
+      } else if (targetBottom > viewportBottom) {
+        container.scrollTo({
+          top: Math.max(0, targetBottom - container.clientHeight),
+          behavior: 'smooth',
+        });
+      }
+      return;
+    }
+
     const containerRect = container.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
 
@@ -345,7 +366,7 @@ function App() {
     } else if (elementRect.bottom > containerRect.bottom) {
       element.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [selectedIndex, allFilteredItems]);
+  }, [selectedIndex, allFilteredItems, pinnedItems.length]);
 
   useEffect(() => {
     scrollToSelectedItem();
