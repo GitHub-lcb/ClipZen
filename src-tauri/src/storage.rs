@@ -425,8 +425,8 @@ impl Storage {
             ("type", "desc") => "ORDER BY pinned DESC, item_type DESC, created_at DESC",
             ("content", "asc") => "ORDER BY pinned DESC, preview ASC, created_at DESC",
             ("content", "desc") => "ORDER BY pinned DESC, preview DESC, created_at DESC",
-            ("popularity", "asc") => "ORDER BY pinned DESC, COALESCE(copy_count, 0) ASC, created_at DESC",
-            ("popularity", "desc") => "ORDER BY pinned DESC, COALESCE(copy_count, 0) DESC, created_at DESC",
+            ("popularity", "asc") => "ORDER BY pinned DESC, COALESCE(updated_at, created_at) ASC, COALESCE(copy_count, 0) ASC, created_at DESC",
+            ("popularity", "desc") => "ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, COALESCE(copy_count, 0) DESC, created_at DESC",
             _ => "ORDER BY pinned DESC, created_at DESC",
         };
 
@@ -981,6 +981,24 @@ mod tests {
         assert_eq!(item.copy_count, 1);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn popularity_sort_matches_recent_copy_order_before_copy_count() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, copy_count)
+             VALUES
+             ('high-count', 'text', 'high count', 'high count', 0, 0, 1000, '', '[]', 2000, 10),
+             ('recent-copy', 'text', 'recent copy', 'recent copy', 0, 0, 900, '', '[]', 3000, 1)",
+            [],
+        ).unwrap();
+
+        let items = storage.get_items_sorted("popularity", "desc").unwrap();
+
+        assert_eq!(items[0].id, "recent-copy");
+        assert_eq!(items[1].id, "high-count");
     }
 
     #[test]
