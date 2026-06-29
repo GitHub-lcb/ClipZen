@@ -39,6 +39,11 @@ interface SettingsPanelProps {
   licenseInfo?: { license_type: string } | null;
 }
 
+const clampHistoryLimit = (value: number) => {
+  if (!Number.isFinite(value)) return 1000;
+  return Math.min(10000, Math.max(100, Math.trunc(value)));
+};
+
 export function SettingsPanel({ 
   isOpen, onClose, t, locale, changeLocale, onFeatureSettingsChange, 
   onRefresh, onActivateLicense, isPro, licenseInfo 
@@ -117,17 +122,25 @@ export function SettingsPanel({
   const saveSettings = async () => {
     if (!settings) return;
     setSaving(true);
+    const normalizedSettings = {
+      ...settings,
+      max_history_items: clampHistoryLimit(settings.max_history_items),
+    };
     try {
-      await invoke("save_settings", { newSettings: settings });
-      setSavedSettings(settings);
-      applyTheme(settings.theme);
+      await invoke("save_settings", { newSettings: normalizedSettings });
+      setSettings(normalizedSettings);
+      setSavedSettings(normalizedSettings);
+      applyTheme(normalizedSettings.theme);
       
       if (onFeatureSettingsChange) {
-        onFeatureSettingsChange(settings.enable_password_protection, settings.enable_masked_copy);
+        onFeatureSettingsChange(
+          normalizedSettings.enable_password_protection,
+          normalizedSettings.enable_masked_copy
+        );
       }
       
       setMessage({ type: 'success', text: t('settings.saved') });
-      changeLocale(settings.language);
+      changeLocale(normalizedSettings.language);
       clearScheduledFeedback();
       closeTimeoutRef.current = window.setTimeout(() => {
         setMessage(null);
@@ -337,7 +350,10 @@ export function SettingsPanel({
                     <Input 
                       type="number" 
                       value={settings.max_history_items} 
-                      onChange={(e) => setSettings({ ...settings, max_history_items: parseInt(e.target.value) || 1000 })} 
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        max_history_items: clampHistoryLimit(Number(e.target.value)),
+                      })}
                       min="100" 
                       max="10000" 
                     />
