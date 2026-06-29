@@ -41,6 +41,7 @@ const SENSITIVE_PATTERNS = [
 ];
 
 const EMPTY_TAGS: readonly string[] = [];
+const EMPTY_ITEM_IDS: ReadonlySet<string> = new Set();
 
 interface SensitiveMatch {
   type: string;
@@ -332,6 +333,21 @@ function App() {
 
     return { pinnedItems: pinned, recentItems: recent };
   }, [filteredItems]);
+  const visibleRecentItems = useMemo(
+    () => recentItems.slice(startIndex, endIndex),
+    [recentItems, startIndex, endIndex]
+  );
+  const maskedCopyItemIds = useMemo(() => {
+    if (!enableMaskedCopy) return EMPTY_ITEM_IDS;
+
+    const ids = new Set<string>();
+    for (const item of visibleRecentItems) {
+      if (item.item_type === "text" && hasSensitiveInfo(item.content)) {
+        ids.add(item.id);
+      }
+    }
+    return ids;
+  }, [enableMaskedCopy, visibleRecentItems]);
   const allFilteredItems = filteredItems;
 
   const scrollToSelectedItem = useCallback(() => {
@@ -1038,13 +1054,13 @@ function App() {
             >
               {startIndex > 0 && <div style={{ height: startIndex * ITEM_HEIGHT }} />}
               
-              {recentItems.slice(startIndex, endIndex).map((item, idx) => {
+              {visibleRecentItems.map((item, idx) => {
                 const actualIdx = startIndex + idx;
                 const globalIdx = pinnedItems.length + actualIdx;
                 const isSelected = selectedIndex === globalIdx;
                 const showDeleteConfirm = deleteConfirmId === item.id;
                 const isProtected = enablePasswordProtection && item.protected && !unlockedItems.has(item.id);
-                const showMaskedCopy = enableMaskedCopy && !isProtected && item.item_type === "text" && hasSensitiveInfo(item.content);
+                const showMaskedCopy = !isProtected && maskedCopyItemIds.has(item.id);
                 
                 return (
                   <motion.div
