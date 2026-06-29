@@ -1,14 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const host = process.env.TAURI_DEV_HOST;
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(async () => ({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(dirname, "./src"),
     },
   },
   clearScreen: false,
@@ -26,6 +28,6 @@ export default defineConfig(async () => ({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
-    maxHeaderSize: 1024 * 1024, // 增加请求头限制到 1MB
+    maxHeaderSize: 1024 * 1024, // Allow larger Tauri dev request headers.
   },
 }));

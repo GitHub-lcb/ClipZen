@@ -155,7 +155,7 @@ ClipZen/
 ├── package.json            # 前端依赖
 ├── tsconfig.json           # TypeScript 配置
 ├── tailwind.config.js      # Tailwind 配置
-├── vite.config.ts          # Vite 配置
+├── vite.config.mts         # Vite 配置
 └── README.md               # 项目说明
 ```
 

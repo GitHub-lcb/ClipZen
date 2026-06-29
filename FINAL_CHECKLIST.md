@@ -41,7 +41,7 @@
 ### Git 配置
 - [x] .gitignore: 完善（排除激活码、构建产物）
 - [x] .prettierrc: 已添加
-- [x] eslint.config.js: 已添加
+- [x] eslint.config.mjs: 已添加
 
 ---
 
