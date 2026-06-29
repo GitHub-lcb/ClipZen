@@ -57,6 +57,18 @@ fn clipboard_item_from_row(row: &Row<'_>) -> Result<ClipboardItem> {
 
 fn parse_tags(tags: Option<&str>) -> Vec<String> {
     tags.and_then(|value| serde_json::from_str(value).ok())
+        .map(|tags: Vec<String>| {
+            tags.into_iter()
+                .filter_map(|tag| {
+                    let trimmed = tag.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_string())
+                    }
+                })
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -1255,6 +1267,20 @@ mod tests {
 
         let item = storage.get_item_by_id("legacy").unwrap().unwrap();
         assert!(item.tags.is_empty());
+    }
+
+    #[test]
+    fn legacy_blank_tags_are_trimmed_and_ignored_when_read() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('legacy', 'text', 'content', 'content', 0, 0, 1, '', '[\"\", \"  \", \" work \"]')",
+            [],
+        ).unwrap();
+
+        let item = storage.get_item_by_id("legacy").unwrap().unwrap();
+
+        assert_eq!(item.tags, vec!["work"]);
     }
 
     #[test]
