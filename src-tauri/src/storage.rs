@@ -168,6 +168,17 @@ impl Storage {
         Ok(id)
     }
 
+    pub fn save_clipboard_item_with_hash_and_limit(
+        &self,
+        content: &str,
+        content_hash: Option<&str>,
+        max_items: u32,
+    ) -> Result<String> {
+        let id = self.save_clipboard_item_with_hash(content, content_hash)?;
+        self.cleanup_old_items(max_items)?;
+        Ok(id)
+    }
+
     /// 清理超出限制的旧记录（保留置顶）
     pub fn cleanup_old_items(&self, max_items: u32) -> Result<usize> {
         // 获取非置顶记录数量
@@ -250,6 +261,19 @@ impl Storage {
                 content_hash,
             ],
         )?;
+        Ok(id)
+    }
+
+    pub fn save_image_item_with_limit(
+        &self,
+        image_data: &[u8],
+        preview_base64: &str,
+        file_path: &str,
+        content_hash: &str,
+        max_items: u32,
+    ) -> Result<String> {
+        let id = self.save_image_item(image_data, preview_base64, file_path, content_hash)?;
+        self.cleanup_old_items(max_items)?;
         Ok(id)
     }
 
@@ -867,6 +891,26 @@ mod tests {
     }
 
     #[test]
+    fn saving_text_with_limit_prunes_old_unpinned_items() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('old', 'text', 'old', 'old', 0, 0, 1, '', '[]')",
+            [],
+        ).unwrap();
+
+        let new_id = storage
+            .save_clipboard_item_with_hash_and_limit("new", None, 1)
+            .unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, new_id);
+        assert_eq!(items[0].content, "new");
+    }
+
+    #[test]
     fn updates_single_item_tags_and_content_by_id() {
         let storage = memory_storage();
         let id = storage.save_clipboard_item("original").unwrap();
@@ -1026,6 +1070,42 @@ mod tests {
             .unwrap();
 
         assert_eq!(second_id, first_id);
+        assert!(image_path.exists());
+        std::fs::remove_file(&image_path).ok();
+        std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn saving_image_with_limit_prunes_old_unpinned_items() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES ('old', 'text', 'old', 'old', 0, 0, 1, '', '[]')",
+            [],
+        ).unwrap();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "clipzen-image-limit-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let image_path = temp_dir.join("image.png");
+        std::fs::write(&image_path, b"image").unwrap();
+
+        let new_id = storage
+            .save_image_item_with_limit(
+                &[1],
+                "preview",
+                image_path.to_str().unwrap(),
+                "image-hash",
+                1,
+            )
+            .unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, new_id);
+        assert_eq!(items[0].item_type, "image");
         assert!(image_path.exists());
         std::fs::remove_file(&image_path).ok();
         std::fs::remove_dir(&temp_dir).ok();

@@ -108,14 +108,17 @@ pub fn save_to_history(
         crate::storage::protect_sensitive_content(&content, app_settings.encryption_key.as_deref());
     let content_hash =
         crate::storage::sensitive_content_hash(&content, app_settings.encryption_key.as_deref());
+    let max_items = app_settings.max_history_items;
     
     // 检测并加密敏感信息
     if let Some(hash) = content_hash.as_deref() {
         storage
-            .save_clipboard_item_with_hash(&processed_content, Some(hash))
+            .save_clipboard_item_with_hash_and_limit(&processed_content, Some(hash), max_items)
             .unwrap_or_default()
     } else {
-        storage.save_clipboard_item(&processed_content).unwrap_or_default()
+        storage
+            .save_clipboard_item_with_hash_and_limit(&processed_content, None, max_items)
+            .unwrap_or_default()
     }
 }
 
@@ -187,13 +190,16 @@ pub fn get_current_clipboard_content(
                 &text,
                 app_settings.encryption_key.as_deref(),
             );
+            let max_items = app_settings.max_history_items;
             let storage = storage.lock().unwrap();
             if let Some(hash) = content_hash.as_deref() {
                 storage
-                    .save_clipboard_item_with_hash(&processed_text, Some(hash))
+                    .save_clipboard_item_with_hash_and_limit(&processed_text, Some(hash), max_items)
                     .ok();
             } else {
-                storage.save_clipboard_item(&processed_text).ok();
+                storage
+                    .save_clipboard_item_with_hash_and_limit(&processed_text, None, max_items)
+                    .ok();
             }
             format!("text:{}", text)
         }
@@ -204,11 +210,15 @@ pub fn get_current_clipboard_content(
             image_data.hash(&mut hasher);
             let hash = hasher.finish();
             let hash_str = format!("{:016x}", hash);
+            let settings_manager = settings.lock().unwrap();
+            let max_items = settings_manager.load().max_history_items;
+            drop(settings_manager);
             
             let storage = storage.lock().unwrap();
             
             if storage.hash_exists(&hash_str).unwrap_or(false) {
                 let _ = storage.update_item_timestamp_by_hash(&hash_str);
+                let _ = storage.cleanup_old_items(max_items);
             } else {
                 let images_dir = dirs::data_local_dir()
                     .unwrap_or_else(|| PathBuf::from("."))
@@ -222,7 +232,13 @@ pub fn get_current_clipboard_content(
                 if fs::write(&file_path, &image_data).is_ok() {
                     let preview = format!("data:image/png;base64,{}", crate::storage::base64_encode(&image_data[..image_data.len().min(5000)]));
                     
-                    let _ = storage.save_image_item(&image_data, &preview, file_path.to_str().unwrap(), &hash_str);
+                    let _ = storage.save_image_item_with_limit(
+                        &image_data,
+                        &preview,
+                        file_path.to_str().unwrap(),
+                        &hash_str,
+                        max_items,
+                    );
                 }
             }
             "image".to_string()
