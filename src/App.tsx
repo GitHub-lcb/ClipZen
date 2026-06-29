@@ -699,7 +699,9 @@ function App() {
 
   const handleMaskedCopy = async (item: ClipboardItem) => {
     const maskedContent = maskSensitiveContent(item.content);
-    await invoke("copy_to_clipboard", { content: maskedContent });
+    await invoke("copy_masked_content", { content: maskedContent });
+    await invoke("increment_copy_count", { id: item.id });
+    handleDataRefresh();
     showCopiedFeedback(item.id);
   };
 
