@@ -903,7 +903,10 @@ function App() {
             setEnableMaskedCopy(maskedCopy);
           }}
           onRefresh={handleDataRefresh}
-          onActivateLicense={() => setLicenseDialogOpen(true)}
+          onActivateLicense={() => {
+            setSettingsOpen(false);
+            setLicenseDialogOpen(true);
+          }}
           isPro={isPro}
           licenseInfo={licenseInfo}
         />
