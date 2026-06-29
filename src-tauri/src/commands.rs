@@ -81,6 +81,11 @@ fn filter_items_for_search(
     query: &str,
     settings: &AppSettings,
 ) -> Vec<crate::storage::ClipboardItem> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+
     decrypt_sensitive_items(&mut items, settings);
 
     let query_lower = query.to_lowercase();
@@ -682,6 +687,24 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].content, "secret-user@example.com");
+    }
+
+    #[test]
+    fn search_ignores_blank_queries() {
+        let settings = AppSettings::default();
+        let items = vec![text_item(
+            "plain",
+            "ordinary clipboard text".to_string(),
+            "ordinary clipboard text".to_string(),
+        )];
+
+        let results = filter_items_for_search(items.clone(), "", &settings);
+
+        assert!(results.is_empty());
+
+        let results = filter_items_for_search(items, "   ", &settings);
+
+        assert!(results.is_empty());
     }
 
     #[test]
