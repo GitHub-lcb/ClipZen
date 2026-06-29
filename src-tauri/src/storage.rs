@@ -475,18 +475,21 @@ impl Storage {
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            [
+            "INSERT OR REPLACE INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, copy_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
                 &item.id,
                 &item.item_type,
                 &item.content,
                 &item.preview,
-                &(if item.pinned { 1 } else { 0 }).to_string(),
-                &(if item.protected { 1 } else { 0 }).to_string(),
-                &item.created_at.to_string(),
-                &item.file_path.clone().unwrap_or_default(),
+                if item.pinned { 1 } else { 0 },
+                if item.protected { 1 } else { 0 },
+                item.created_at,
+                item.file_path.as_deref().unwrap_or_default(),
                 &tags_json,
+                item.updated_at,
+                item.copy_count,
             ],
         )?;
         Ok(())
@@ -770,5 +773,29 @@ mod tests {
         ).unwrap();
 
         assert_eq!(storage.get_all_tags().unwrap(), vec!["clip", "later", "work"]);
+    }
+
+    #[test]
+    fn import_item_preserves_exported_metadata() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "imported".to_string(),
+            item_type: "text".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
+            pinned: true,
+            protected: true,
+            created_at: 100,
+            updated_at: Some(200),
+            file_path: None,
+            tags: vec!["work".to_string()],
+            copy_count: 7,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage.get_item_by_id("imported").unwrap().unwrap();
+        assert_eq!(imported.updated_at, Some(200));
+        assert_eq!(imported.copy_count, 7);
     }
 }
