@@ -12,7 +12,7 @@ use dirs::data_dir;
 use aes_gcm::{aead::{Aead, KeyInit}, Aes256Gcm, Nonce};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -76,6 +76,13 @@ fn parse_tags(tags: Option<&str>) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn file_list_content_hash(file_paths: &[String]) -> String {
+    let mut sorted_paths = file_paths.to_vec();
+    sorted_paths.sort();
+    let digest = Sha256::digest(sorted_paths.join("\n").as_bytes());
+    format!("files:{:x}", digest)
 }
 
 impl Storage {
@@ -301,6 +308,12 @@ impl Storage {
     /// 保存文件路径列表
     pub fn save_files_item(&self, file_paths: &[String]) -> Result<String> {
         let content = file_paths.join("\n");
+        let content_hash = file_list_content_hash(file_paths);
+        if let Some(existing_id) = self.get_item_id_by_hash(&content_hash)? {
+            self.update_item_timestamp_by_hash(&content_hash)?;
+            return Ok(existing_id);
+        }
+
         if let Some(existing_id) = self.get_file_item_id_by_content(&content)? {
             self.update_item_timestamp_by_id(&existing_id)?;
             return Ok(existing_id);
@@ -327,18 +340,19 @@ impl Storage {
         };
         
         self.conn.execute(
-            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            [
+            "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, content_hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
                 &id,
-                &"files".to_string(),
+                "files",
                 &content,
                 &preview,
-                &0.to_string(),
-                &0.to_string(),
-                &Utc::now().timestamp_millis().to_string(),
-                &file_paths.first().cloned().unwrap_or_default(),
-                &"[]".to_string(),
+                0,
+                0,
+                Utc::now().timestamp_millis(),
+                file_paths.first().map(String::as_str).unwrap_or_default(),
+                "[]",
+                &content_hash,
             ],
         )?;
         Ok(id)
@@ -999,6 +1013,28 @@ mod tests {
         assert_eq!(second_id, first_id);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].item_type, "files");
+        assert_eq!(items[0].content, files.join("\n"));
+    }
+
+    #[test]
+    fn saving_same_file_set_in_different_order_refreshes_existing_item() {
+        let storage = memory_storage();
+        let files = vec![
+            "C:\\Users\\clip\\one.txt".to_string(),
+            "C:\\Users\\clip\\two.txt".to_string(),
+        ];
+        let reversed_files = vec![
+            "C:\\Users\\clip\\two.txt".to_string(),
+            "C:\\Users\\clip\\one.txt".to_string(),
+        ];
+
+        let first_id = storage.save_files_item(&files).unwrap();
+
+        let second_id = storage.save_files_item(&reversed_files).unwrap();
+        let items = storage.get_all_items().unwrap();
+
+        assert_eq!(second_id, first_id);
+        assert_eq!(items.len(), 1);
         assert_eq!(items[0].content, files.join("\n"));
     }
 
