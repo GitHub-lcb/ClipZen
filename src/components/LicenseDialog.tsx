@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Key, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { DIALOG_LICENSE_FEATURE_KEYS, getLicenseTypeKey } from '@/lib/license';
 
 interface LicenseDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onActivated: () => void;
+  onActivated: (licenseInfo: LicenseInfo | null) => void;
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 export interface LicenseInfo {
@@ -22,7 +24,7 @@ interface ActivationResult {
   license_info: LicenseInfo | null;
 }
 
-export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogProps) {
+export function LicenseDialog({ isOpen, onClose, onActivated, t }: LicenseDialogProps) {
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,9 +43,7 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
   if (!isOpen) return null;
 
   const formatCode = (value: string) => {
-    // 移除所有非字母数字字符
     const cleaned = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    // 每 4 个字符添加连字符
     const parts = [];
     for (let i = 0; i < cleaned.length && i < 16; i += 4) {
       parts.push(cleaned.slice(i, i + 4));
@@ -55,39 +55,6 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
     const formatted = formatCode(e.target.value);
     setCode(formatted);
     setError('');
-  };
-
-  const handleActivate = async () => {
-    if (code.length < 19) { // XXXX-XXXX-XXXX-XXXX = 19 chars
-      setError('请输入完整的激活码');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const result = await invoke<ActivationResult>('activate_license', { code });
-      
-      if (result.success) {
-        setSuccess(true);
-        setLicenseInfo(result.license_info);
-        if (closeTimeoutRef.current !== null) {
-          window.clearTimeout(closeTimeoutRef.current);
-        }
-        closeTimeoutRef.current = window.setTimeout(() => {
-          onActivated();
-          handleClose();
-          closeTimeoutRef.current = null;
-        }, 2000);
-      } else {
-        setError(result.message);
-      }
-    } catch (err: unknown) {
-      setError('激活失败：' + String(err));
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleClose = () => {
@@ -102,43 +69,70 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
     onClose();
   };
 
-  const getLicenseTypeText = (type: string) => {
-    switch (type) {
-      case 'Standard': return '标准版';
-      case 'Family': return '家庭版';
-      case 'Enterprise': return '企业版';
-      default: return '未知版本';
+  const handleActivate = async () => {
+    if (code.length < 19) {
+      setError(t('license.incompleteCode'));
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const result = await invoke<ActivationResult>('activate_license', { code });
+
+      if (result.success) {
+        setSuccess(true);
+        setLicenseInfo(result.license_info);
+        if (closeTimeoutRef.current !== null) {
+          window.clearTimeout(closeTimeoutRef.current);
+        }
+        closeTimeoutRef.current = window.setTimeout(() => {
+          onActivated(result.license_info);
+          handleClose();
+          closeTimeoutRef.current = null;
+        }, 2000);
+      } else {
+        setError(result.message);
+      }
+    } catch (err: unknown) {
+      setError(t('license.activationFailed', { error: String(err) }));
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {success ? '激活成功' : '激活 ClipZen Pro'}
+            {success ? t('license.successTitle') : t('license.dialogTitle')}
           </h3>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            aria-label={t('actions.cancel')}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-6">
           {success ? (
             <div className="text-center py-4">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                激活成功！
+                {t('license.successMessage')}
               </p>
               {licenseInfo && (
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <p>版本：{getLicenseTypeText(licenseInfo.license_type)}</p>
-                  <p>设备数：{licenseInfo.device_slots} 台</p>
+                  <p>
+                    {t('license.version', {
+                      type: t(getLicenseTypeKey(licenseInfo.license_type)),
+                    })}
+                  </p>
+                  <p>{t('license.deviceSlots', { n: licenseInfo.device_slots })}</p>
                 </div>
               )}
             </div>
@@ -146,12 +140,12 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
             <>
               <div className="mb-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  请输入您的激活码以解锁 ClipZen Pro 功能。
+                  {t('license.description')}
                 </p>
-                
+
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    激活码
+                    {t('license.codeLabel')}
                   </label>
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -177,21 +171,21 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
 
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
                 <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                  Pro 功能包括：
+                  {t('license.featuresTitle')}
                 </h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  <li>✓ 加密存储保护</li>
-                  <li>✓ 无限历史记录</li>
-                  <li>✓ 自定义主题</li>
-                  <li>✓ 优先技术支持</li>
-                  <li>✓ 终身免费更新</li>
+                  {DIALOG_LICENSE_FEATURE_KEYS.map((key) => (
+                    <li key={key} className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                      <span>{t(key)}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </>
           )}
         </div>
 
-        {/* Footer */}
         {!success && (
           <div className="flex gap-3 px-6 py-4 bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-700">
             <button
@@ -199,7 +193,7 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
               className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
               disabled={isLoading}
             >
-              取消
+              {t('actions.cancel')}
             </button>
             <button
               onClick={handleActivate}
@@ -209,10 +203,10 @@ export function LicenseDialog({ isOpen, onClose, onActivated }: LicenseDialogPro
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  激活中...
+                  {t('license.activating')}
                 </>
               ) : (
-                '立即激活'
+                t('license.activateNow')
               )}
             </button>
           </div>

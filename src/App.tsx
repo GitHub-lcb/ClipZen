@@ -1149,10 +1149,14 @@ function App() {
         <LicenseDialog
           isOpen={licenseDialogOpen}
           onClose={() => setLicenseDialogOpen(false)}
-          onActivated={() => {
+          onActivated={(activatedLicenseInfo) => {
             setIsPro(true);
+            if (activatedLicenseInfo) {
+              setLicenseInfo(activatedLicenseInfo);
+            }
             refresh();
           }}
+          t={t}
         />
       </div>
     </TooltipProvider>

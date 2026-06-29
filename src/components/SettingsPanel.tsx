@@ -4,11 +4,12 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings, X, Save, RotateCcw, Monitor, Moon, Sun, Globe, 
-  Rocket, Database, Download, Upload, Trash2, Loader2 
+  Rocket, Database, Download, Upload, Trash2, Loader2, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { CORE_LICENSE_FEATURE_KEYS, getLicenseTypeKey } from "@/lib/license";
 import { applyTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -264,32 +265,34 @@ export function SettingsPanel({
                       </div>
                       <div>
                         <h3 className="text-sm font-semibold">
-                          {isPro ? 'ClipZen Pro' : '升级到 Pro'}
+                          {isPro ? t('license.proTitle') : t('license.upgradeTitle')}
                         </h3>
                         {isPro && licenseInfo && (
                           <p className="text-xs text-muted-foreground">
-                            {licenseInfo.license_type === 'Standard' ? '标准版' : licenseInfo.license_type === 'Family' ? '家庭版' : '企业版'}
+                            {t(getLicenseTypeKey(licenseInfo.license_type))}
                           </p>
                         )}
                       </div>
                     </div>
                     {!isPro && (
                       <Button size="sm" onClick={onActivateLicense}>
-                        激活
+                        {t('license.activate')}
                       </Button>
                     )}
                   </div>
                   {!isPro && (
                     <ul className="text-xs text-muted-foreground space-y-1">
-                      <li>✓ 加密存储保护</li>
-                      <li>✓ 无限历史记录</li>
-                      <li>✓ 自定义主题</li>
-                      <li>✓ 终身免费更新</li>
+                      {CORE_LICENSE_FEATURE_KEYS.map((key) => (
+                        <li key={key} className="flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-primary" />
+                          <span>{t(key)}</span>
+                        </li>
+                      ))}
                     </ul>
                   )}
                   {isPro && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      感谢您的支持！您已激活 Pro 版本。
+                      {t('license.thanks')}
                     </p>
                   )}
                 </Card>
