@@ -290,7 +290,7 @@ export function ItemDetail({
                 <Card className="overflow-hidden">
                   <img 
                     src={imageData || item.content} 
-                    alt="Preview" 
+                    alt={t('image.preview')}
                     className="w-full max-h-64 object-contain"
                   />
                 </Card>

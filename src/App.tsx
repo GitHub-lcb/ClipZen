@@ -624,7 +624,11 @@ function App() {
                 exit={{ scale: 0.9, opacity: 0 }}
                 className="relative max-w-4xl max-h-[90vh] p-4"
               >
-                <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
+                <img
+                  src={previewImage}
+                  alt={t('image.preview')}
+                  className="max-w-full max-h-[85vh] object-contain rounded-lg"
+                />
                 <Button 
                   variant="secondary"
                   size="icon"
@@ -843,7 +847,7 @@ function App() {
                         <div className="relative w-full h-full min-h-[80px]">
                           <img 
                             src={item.preview} 
-                            alt="Image" 
+                            alt={t('image.label')}
                             className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-300" 
                           />
                         </div>
@@ -988,7 +992,11 @@ function App() {
                           {item.item_type === "image" ? (
                             <div className="flex items-center gap-3">
                               <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border">
-                                <img src={item.preview} alt="Image" className="w-full h-full object-cover" />
+                                <img
+                                  src={item.preview}
+                                  alt={t('image.label')}
+                                  className="w-full h-full object-cover"
+                                />
                               </div>
                               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                 <Clock className="w-3 h-3" />
