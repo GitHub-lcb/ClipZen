@@ -7,6 +7,18 @@
     "placeholder": "搜索剪贴板历史...",
     "shortcut": "Ctrl+F"
   },
+  "common": {
+    "loading": "加载中..."
+  },
+  "files": {
+    "count": "{n} 个文件"
+  },
+  "sensitive": {
+    "phone": "手机号",
+    "email": "邮箱",
+    "idcard": "身份证",
+    "bankcard": "银行卡"
+  },
   "pinned": {
     "title": "常用片段"
   },

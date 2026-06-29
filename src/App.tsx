@@ -34,22 +34,21 @@ import type { LicenseInfo } from "@/components/LicenseDialog";
 import { cn } from "@/lib/utils";
 
 const SENSITIVE_PATTERNS = [
-  { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
-  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email", label: "邮箱" },
-  { pattern: /\d{17}[\dXx]/g, type: "idcard", label: "身份证" },
-  { pattern: /\b\d{16,19}\b/g, type: "bankcard", label: "银行卡" },
+  { pattern: /1[3-9]\d{9}/g, type: "phone" },
+  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email" },
+  { pattern: /\d{17}[\dXx]/g, type: "idcard" },
+  { pattern: /\b\d{16,19}\b/g, type: "bankcard" },
 ];
 
 interface SensitiveMatch {
   type: string;
-  label: string;
   original: string;
   masked: string;
 }
 
 function detectSensitive(content: string): SensitiveMatch[] {
   const matches: SensitiveMatch[] = [];
-  for (const { pattern, type, label } of SENSITIVE_PATTERNS) {
+  for (const { pattern, type } of SENSITIVE_PATTERNS) {
     const found = content.match(pattern);
     if (found) {
       for (const text of found) {
@@ -72,7 +71,7 @@ function detectSensitive(content: string): SensitiveMatch[] {
           default:
             masked = "****";
         }
-        matches.push({ type, label, original: text, masked });
+        matches.push({ type, original: text, masked });
       }
     }
   }
@@ -592,7 +591,7 @@ function App() {
           transition={{ delay: 0.2 }}
           className="mt-4 text-sm text-muted-foreground"
         >
-          {t('recent.empty') === '暂无记录' ? '加载中...' : 'Loading...'}
+          {t('common.loading')}
         </motion.p>
       </div>
     );
@@ -992,7 +991,9 @@ function App() {
                               <FolderOpen className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />
                               <div>
                                 <p className="text-sm line-clamp-2">{item.preview}</p>
-                                <p className="text-xs mt-1 text-muted-foreground">{item.content.split('\n').length} 个文件</p>
+                                <p className="text-xs mt-1 text-muted-foreground">
+                                  {t('files.count', { n: item.content.split('\n').length })}
+                                </p>
                               </div>
                             </div>
                           ) : (
@@ -1127,7 +1128,9 @@ function App() {
                   className="flex items-center justify-center py-4"
                 >
                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
+                  <span className="ml-2 text-sm text-muted-foreground">
+                    {t('common.loading')}
+                  </span>
                 </motion.div>
               )}
             </motion.div>

@@ -24,21 +24,20 @@ interface ItemDetailProps {
   };
   onClose: () => void;
   onUpdate: () => void;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
   enablePasswordProtection?: boolean;
   allTags?: string[];
 }
 
 const SENSITIVE_PATTERNS = [
-  { pattern: /1[3-9]\d{9}/g, type: "phone", label: "手机号" },
-  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email", label: "邮箱" },
-  { pattern: /\d{17}[\dXx]/g, type: "idcard", label: "身份证" },
-  { pattern: /\b\d{16,19}\b/g, type: "bankcard", label: "银行卡" },
+  { pattern: /1[3-9]\d{9}/g, type: "phone" },
+  { pattern: /[\w.-]+@[\w.-]+\.\w+/g, type: "email" },
+  { pattern: /\d{17}[\dXx]/g, type: "idcard" },
+  { pattern: /\b\d{16,19}\b/g, type: "bankcard" },
 ];
 
 interface SensitiveMatch {
   type: string;
-  label: string;
   original: string;
   masked: string;
 }
@@ -46,7 +45,7 @@ interface SensitiveMatch {
 function detectSensitive(content: string): SensitiveMatch[] {
   const matches: SensitiveMatch[] = [];
   
-  for (const { pattern, type, label } of SENSITIVE_PATTERNS) {
+  for (const { pattern, type } of SENSITIVE_PATTERNS) {
     const found = content.match(pattern);
     if (found) {
       for (const text of found) {
@@ -69,7 +68,7 @@ function detectSensitive(content: string): SensitiveMatch[] {
           default:
             masked = "****";
         }
-        matches.push({ type, label, original: text, masked });
+        matches.push({ type, original: text, masked });
       }
     }
   }
@@ -370,7 +369,7 @@ export function ItemDetail({
                       key={idx}
                       className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-500/20 text-amber-600"
                     >
-                      {match.label}
+                      {t(`sensitive.${match.type}`)}
                     </span>
                   ))}
                 </div>

@@ -7,6 +7,18 @@
     "placeholder": "Search clipboard history...",
     "shortcut": "Ctrl+F"
   },
+  "common": {
+    "loading": "Loading..."
+  },
+  "files": {
+    "count": "{n} files"
+  },
+  "sensitive": {
+    "phone": "Phone",
+    "email": "Email",
+    "idcard": "ID card",
+    "bankcard": "Bank card"
+  },
   "pinned": {
     "title": "Pinned"
   },
