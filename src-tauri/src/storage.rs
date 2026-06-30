@@ -567,7 +567,7 @@ impl Storage {
         }
 
         let Some(mut item) = self.get_item_by_id(id)? else {
-            return Ok(());
+            return Err(rusqlite::Error::QueryReturnedNoRows);
         };
 
         if !item.tags.iter().any(|existing| existing == tag) {
@@ -1201,6 +1201,13 @@ mod tests {
         assert_eq!(item.tags, vec!["work"]);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn adding_tag_to_missing_item_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage.add_tag_to_item("missing-item", "work").is_err());
     }
 
     #[test]
