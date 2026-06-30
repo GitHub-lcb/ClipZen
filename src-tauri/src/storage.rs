@@ -84,9 +84,23 @@ fn file_list_content_hash(file_paths: &[String]) -> String {
 }
 
 fn normalized_file_paths(file_paths: &[String]) -> Vec<String> {
-    let mut sorted_paths = file_paths.to_vec();
+    let mut sorted_paths = clean_file_paths(file_paths);
     sorted_paths.sort();
     sorted_paths
+}
+
+fn clean_file_paths(file_paths: &[String]) -> Vec<String> {
+    file_paths
+        .iter()
+        .filter_map(|path| {
+            let path = path.trim();
+            if path.is_empty() {
+                None
+            } else {
+                Some(path.to_string())
+            }
+        })
+        .collect()
 }
 
 impl Storage {
@@ -315,12 +329,13 @@ impl Storage {
 
     /// 保存文件路径列表
     pub fn save_files_item(&self, file_paths: &[String]) -> Result<String> {
+        let file_paths = clean_file_paths(file_paths);
         if file_paths.is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
         let content = file_paths.join("\n");
-        let content_hash = file_list_content_hash(file_paths);
+        let content_hash = file_list_content_hash(&file_paths);
         if let Some(existing_id) = self.get_item_id_by_hash(&content_hash)? {
             self.update_item_timestamp_by_hash(&content_hash)?;
             return Ok(existing_id);
@@ -331,7 +346,7 @@ impl Storage {
             return Ok(existing_id);
         }
 
-        if let Some(existing_id) = self.get_file_item_id_by_file_set(file_paths)? {
+        if let Some(existing_id) = self.get_file_item_id_by_file_set(&file_paths)? {
             self.update_item_timestamp_by_id(&existing_id)?;
             return Ok(existing_id);
         }
@@ -1102,6 +1117,15 @@ mod tests {
         let storage = memory_storage();
 
         assert!(storage.save_files_item(&[]).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn saving_blank_file_paths_is_rejected() {
+        let storage = memory_storage();
+        let files = vec!["   ".to_string(), "\t".to_string()];
+
+        assert!(storage.save_files_item(&files).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
     }
 
