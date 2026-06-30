@@ -745,6 +745,10 @@ impl Storage {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
+        if item.created_at <= 0 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if item
             .updated_at
             .is_some_and(|updated_at| updated_at < item.created_at)
@@ -1841,6 +1845,27 @@ mod tests {
             file_path: None,
             tags: Vec::new(),
             copy_count: -1,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_rejects_non_positive_created_at() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "invalid-created-at".to_string(),
+            item_type: "text".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 0,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
         };
 
         assert!(storage.import_item(&item).is_err());
