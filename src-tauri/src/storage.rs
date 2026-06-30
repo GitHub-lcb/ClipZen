@@ -283,6 +283,10 @@ impl Storage {
 
     /// 保存图片剪贴板
     pub fn save_image_item(&self, _image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
+        if file_path.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if let Some(existing_id) = self.get_item_id_by_hash(content_hash)? {
             self.update_item_timestamp_by_hash(content_hash)?;
             let existing_path = self
@@ -738,6 +742,17 @@ impl Storage {
         }
 
         if item.item_type == "text" && item.content.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
+        if item.item_type == "image"
+            && item
+                .file_path
+                .as_deref()
+                .map(str::trim)
+                .unwrap_or_default()
+                .is_empty()
+        {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
@@ -1583,6 +1598,16 @@ mod tests {
     }
 
     #[test]
+    fn saving_image_with_blank_file_path_is_rejected() {
+        let storage = memory_storage();
+
+        assert!(storage
+            .save_image_item(&[1], "preview", "  \n\t", "image-hash")
+            .is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
     fn saving_image_with_limit_prunes_old_unpinned_items() {
         let storage = memory_storage();
         storage.conn.execute(
@@ -1774,6 +1799,27 @@ mod tests {
             item_type: "files".to_string(),
             content: "  \n\t".to_string(),
             preview: "".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_rejects_image_without_file_path() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "image-without-path".to_string(),
+            item_type: "image".to_string(),
+            content: "".to_string(),
+            preview: "preview".to_string(),
             pinned: false,
             protected: false,
             created_at: 100,
