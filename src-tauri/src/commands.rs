@@ -98,6 +98,10 @@ fn filter_items_for_search(
         .collect()
 }
 
+fn storage_command_result(result: rusqlite::Result<()>) -> Result<(), String> {
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -128,35 +132,27 @@ pub fn save_to_history(
 }
 
 #[tauri::command]
-pub fn delete_history_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+pub fn delete_history_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    // 如果是图片，删除文件
-    if let Ok(Some(item)) = storage.get_item_by_id(&id) {
-        if item.item_type == "image" {
-            if let Some(path) = &item.file_path {
-                fs::remove_file(path).ok();
-            }
-        }
-    }
-    storage.delete_item(&id).is_ok()
+    storage_command_result(storage.delete_item(&id))
 }
 
 #[tauri::command]
-pub fn toggle_pin_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+pub fn toggle_pin_item(id: String, storage: State<Arc<Mutex<Storage>>>) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    storage.toggle_pin(&id).is_ok()
+    storage_command_result(storage.toggle_pin(&id))
 }
 
 #[tauri::command]
-pub fn toggle_protected(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+pub fn toggle_protected(id: String, storage: State<Arc<Mutex<Storage>>>) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    storage.toggle_protected(&id).is_ok()
+    storage_command_result(storage.toggle_protected(&id))
 }
 
 #[tauri::command]
-pub fn increment_copy_count(id: String, storage: State<Arc<Mutex<Storage>>>) -> bool {
+pub fn increment_copy_count(id: String, storage: State<Arc<Mutex<Storage>>>) -> Result<(), String> {
     let storage = storage.lock().unwrap();
-    storage.increment_copy_count(&id).is_ok()
+    storage_command_result(storage.increment_copy_count(&id))
 }
 
 #[tauri::command]
@@ -726,6 +722,13 @@ mod tests {
         assert!(!should_clear_history_item(&pinned, true));
         assert!(!should_clear_history_item(&tagged, true));
         assert!(should_clear_history_item(&plain, true));
+    }
+
+    #[test]
+    fn storage_command_result_rejects_storage_errors() {
+        let result = storage_command_result(Err(rusqlite::Error::QueryReturnedNoRows));
+
+        assert!(result.is_err());
     }
 
     #[test]
