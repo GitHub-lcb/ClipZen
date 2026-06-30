@@ -742,7 +742,8 @@ impl Storage {
 
     /// 导入单条记录（用于批量导入）
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
-        if item.id.trim().is_empty() {
+        let id = item.id.trim();
+        if id.is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
@@ -821,7 +822,7 @@ impl Storage {
              (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, copy_count)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
-                &item.id,
+                id,
                 &item.item_type,
                 &content,
                 &preview,
@@ -841,7 +842,8 @@ impl Storage {
     pub fn import_items(&self, items: &[ClipboardItem]) -> Result<usize> {
         let mut imported_ids = HashSet::new();
         for item in items {
-            if !imported_ids.insert(item.id.as_str()) {
+            let id = item.id.trim();
+            if id.is_empty() || !imported_ids.insert(id) {
                 return Err(rusqlite::Error::InvalidQuery);
             }
         }
@@ -1858,6 +1860,29 @@ mod tests {
     }
 
     #[test]
+    fn import_item_trims_id() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "  imported-id  ".to_string(),
+            item_type: "text".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        assert!(storage.get_item_by_id("  imported-id  ").unwrap().is_none());
+        assert!(storage.get_item_by_id("imported-id").unwrap().is_some());
+    }
+
+    #[test]
     fn import_item_rejects_negative_copy_count() {
         let storage = memory_storage();
         let item = super::ClipboardItem {
@@ -1972,6 +1997,40 @@ mod tests {
         };
         let second = super::ClipboardItem {
             id: "duplicate-import".to_string(),
+            item_type: "text".to_string(),
+            content: "second content".to_string(),
+            preview: "second content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 200,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_items(&[first, second]).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_items_rejects_duplicate_ids_after_trimming() {
+        let storage = memory_storage();
+        let first = super::ClipboardItem {
+            id: "duplicate-import".to_string(),
+            item_type: "text".to_string(),
+            content: "first content".to_string(),
+            preview: "first content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+        let second = super::ClipboardItem {
+            id: " duplicate-import ".to_string(),
             item_type: "text".to_string(),
             content: "second content".to_string(),
             preview: "second content".to_string(),
