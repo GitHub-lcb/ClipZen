@@ -123,6 +123,10 @@ fn search_history_result(
     Ok(filter_items_for_search(items, query, settings))
 }
 
+fn clear_history_delete_result(result: rusqlite::Result<()>) -> Result<(), String> {
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -431,13 +435,7 @@ pub fn clear_all_history(
         if !should_clear_history_item(&item, keep_pinned) {
             continue;
         }
-        // 删除文件（如果是图片）
-        if item.item_type == "image" {
-            if let Some(path) = &item.file_path {
-                fs::remove_file(path).ok();
-            }
-        }
-        let _ = storage.delete_item(&item.id);
+        clear_history_delete_result(storage.delete_item(&item.id))?;
         deleted += 1;
     }
     
@@ -780,6 +778,13 @@ mod tests {
     fn search_history_result_rejects_storage_errors() {
         let settings = AppSettings::default();
         let result = search_history_result(Err(rusqlite::Error::InvalidQuery), "query", &settings);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn clear_history_delete_result_rejects_storage_errors() {
+        let result = clear_history_delete_result(Err(rusqlite::Error::QueryReturnedNoRows));
 
         assert!(result.is_err());
     }
