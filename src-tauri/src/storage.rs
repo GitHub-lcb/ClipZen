@@ -90,11 +90,12 @@ fn normalized_file_paths(file_paths: &[String]) -> Vec<String> {
 }
 
 fn clean_file_paths(file_paths: &[String]) -> Vec<String> {
+    let mut seen = HashSet::new();
     file_paths
         .iter()
         .filter_map(|path| {
             let path = path.trim();
-            if path.is_empty() {
+            if path.is_empty() || !seen.insert(path.to_string()) {
                 None
             } else {
                 Some(path.to_string())
@@ -1127,6 +1128,25 @@ mod tests {
 
         assert!(storage.save_files_item(&files).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn saving_duplicate_file_paths_collapses_duplicates() {
+        let storage = memory_storage();
+        let files = vec![
+            "C:\\Users\\clip\\one.txt".to_string(),
+            "C:\\Users\\clip\\one.txt".to_string(),
+            "C:\\Users\\clip\\two.txt".to_string(),
+        ];
+
+        storage.save_files_item(&files).unwrap();
+
+        let items = storage.get_all_items().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(
+            items[0].content,
+            "C:\\Users\\clip\\one.txt\nC:\\Users\\clip\\two.txt"
+        );
     }
 
     #[test]
