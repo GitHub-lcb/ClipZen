@@ -785,6 +785,8 @@ impl Storage {
         let mut file_path = item.file_path.as_deref().unwrap_or_default().to_string();
 
         if item.item_type == "image" {
+            content = content.trim().to_string();
+            preview = preview.trim().to_string();
             file_path = file_path.trim().to_string();
         }
 
@@ -2166,6 +2168,59 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(imported.file_path.as_deref(), Some("C:\\Users\\clip\\image.png"));
+    }
+
+    #[test]
+    fn import_item_trims_image_preview() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "image-with-spaced-preview".to_string(),
+            item_type: "image".to_string(),
+            content: "".to_string(),
+            preview: "  data:image/png;base64,preview-data  ".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: Some("image.png".to_string()),
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage
+            .get_item_by_id("image-with-spaced-preview")
+            .unwrap()
+            .unwrap();
+        assert_eq!(imported.preview, "data:image/png;base64,preview-data");
+    }
+
+    #[test]
+    fn import_item_trims_image_content_before_using_it_as_preview() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "image-with-spaced-content".to_string(),
+            item_type: "image".to_string(),
+            content: "  data:image/png;base64,preview-data  ".to_string(),
+            preview: "  \n\t".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: Some("image.png".to_string()),
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage
+            .get_item_by_id("image-with-spaced-content")
+            .unwrap()
+            .unwrap();
+        assert_eq!(imported.content, "data:image/png;base64,preview-data");
+        assert_eq!(imported.preview, "data:image/png;base64,preview-data");
     }
 
     #[test]
