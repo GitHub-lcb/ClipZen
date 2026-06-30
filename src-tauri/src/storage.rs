@@ -733,6 +733,10 @@ impl Storage {
 
     /// 导入单条记录（用于批量导入）
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
+        if !matches!(item.item_type.as_str(), "text" | "image" | "files") {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if item.item_type == "text" && item.content.trim().is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
@@ -1721,6 +1725,27 @@ mod tests {
             item_type: "text".to_string(),
             content: "  \n\t".to_string(),
             preview: "".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_rejects_unknown_item_type() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "unknown".to_string(),
+            item_type: "unknown".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
             pinned: false,
             protected: false,
             created_at: 100,
