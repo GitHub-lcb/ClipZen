@@ -150,7 +150,7 @@ fn clear_history_delete_result(result: rusqlite::Result<()>) -> Result<(), Strin
     result.map_err(|e| e.to_string())
 }
 
-fn import_item_result(result: rusqlite::Result<()>) -> Result<(), String> {
+fn import_items_result(result: rusqlite::Result<usize>) -> Result<usize, String> {
     result.map_err(|e| e.to_string())
 }
 
@@ -442,14 +442,7 @@ pub fn import_history(
         .map_err(|e| format!("Failed to parse JSON: {}", e))?;
     
     let storage = storage.lock().unwrap();
-    let mut count = 0;
-    
-    for item in items {
-        import_item_result(storage.import_item(&item))?;
-        count += 1;
-    }
-    
-    Ok(count)
+    import_items_result(storage.import_items(&items))
 }
 
 fn should_clear_history_item(item: &crate::storage::ClipboardItem, keep_pinned: bool) -> bool {
@@ -856,8 +849,8 @@ mod tests {
     }
 
     #[test]
-    fn import_item_result_rejects_storage_errors() {
-        let result = import_item_result(Err(rusqlite::Error::InvalidQuery));
+    fn import_items_result_rejects_storage_errors() {
+        let result = import_items_result(Err(rusqlite::Error::InvalidQuery));
 
         assert!(result.is_err());
     }

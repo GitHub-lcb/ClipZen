@@ -799,6 +799,34 @@ impl Storage {
         Ok(())
     }
 
+    /// 批量导入记录，任意一条失败时回滚整批。
+    pub fn import_items(&self, items: &[ClipboardItem]) -> Result<usize> {
+        self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION")?;
+
+        let result = (|| {
+            let mut count = 0;
+            for item in items {
+                self.import_item(item)?;
+                count += 1;
+            }
+            Ok(count)
+        })();
+
+        match result {
+            Ok(count) => {
+                if let Err(error) = self.conn.execute_batch("COMMIT") {
+                    let _ = self.conn.execute_batch("ROLLBACK");
+                    return Err(error);
+                }
+                Ok(count)
+            }
+            Err(error) => {
+                let _ = self.conn.execute_batch("ROLLBACK");
+                Err(error)
+            }
+        }
+    }
+
     /// 自动清理过期记录
     pub fn auto_cleanup(&self, days: u32) -> Result<usize> {
         if days == 0 {
@@ -1802,6 +1830,40 @@ mod tests {
         };
 
         assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_items_rolls_back_when_any_item_is_invalid() {
+        let storage = memory_storage();
+        let valid = super::ClipboardItem {
+            id: "valid-import".to_string(),
+            item_type: "text".to_string(),
+            content: "valid content".to_string(),
+            preview: "valid content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+        let invalid = super::ClipboardItem {
+            id: "invalid-import".to_string(),
+            item_type: "text".to_string(),
+            content: "invalid content".to_string(),
+            preview: "invalid content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 200,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: -1,
+        };
+
+        assert!(storage.import_items(&[valid, invalid]).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
     }
 
