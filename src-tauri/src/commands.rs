@@ -131,13 +131,17 @@ fn import_item_result(result: rusqlite::Result<()>) -> Result<(), String> {
     result.map_err(|e| e.to_string())
 }
 
+fn save_history_result(result: rusqlite::Result<String>) -> Result<String, String> {
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
     _item_type: String,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
-) -> String {
+) -> Result<String, String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
@@ -150,13 +154,17 @@ pub fn save_to_history(
     
     // 检测并加密敏感信息
     if let Some(hash) = content_hash.as_deref() {
-        storage
-            .save_clipboard_item_with_hash_and_limit(&processed_content, Some(hash), max_items)
-            .unwrap_or_default()
+        save_history_result(storage.save_clipboard_item_with_hash_and_limit(
+            &processed_content,
+            Some(hash),
+            max_items,
+        ))
     } else {
-        storage
-            .save_clipboard_item_with_hash_and_limit(&processed_content, None, max_items)
-            .unwrap_or_default()
+        save_history_result(storage.save_clipboard_item_with_hash_and_limit(
+            &processed_content,
+            None,
+            max_items,
+        ))
     }
 }
 
@@ -796,6 +804,13 @@ mod tests {
     #[test]
     fn import_item_result_rejects_storage_errors() {
         let result = import_item_result(Err(rusqlite::Error::InvalidQuery));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_history_result_rejects_storage_errors() {
+        let result = save_history_result(Err(rusqlite::Error::InvalidQuery));
 
         assert!(result.is_err());
     }
