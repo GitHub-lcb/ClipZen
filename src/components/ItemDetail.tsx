@@ -205,9 +205,13 @@ export function ItemDetail({
   };
 
   const handleToggleProtected = async () => {
-    await invoke("toggle_protected", { id: item.id });
-    setProtectedState({ itemId: item.id, value: !isProtected });
-    onUpdate();
+    try {
+      await invoke("toggle_protected", { id: item.id });
+      setProtectedState({ itemId: item.id, value: !isProtected });
+      onUpdate();
+    } catch (error) {
+      console.error("Failed to toggle protected:", error);
+    }
   };
 
   const handleShowProtectedContent = () => {
