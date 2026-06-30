@@ -784,6 +784,10 @@ impl Storage {
         let mut preview = item.preview.clone();
         let mut file_path = item.file_path.as_deref().unwrap_or_default().to_string();
 
+        if item.item_type == "image" {
+            file_path = file_path.trim().to_string();
+        }
+
         if item.item_type == "text" && preview.trim().is_empty() {
             preview = content.chars().take(100).collect();
         }
@@ -2136,6 +2140,32 @@ mod tests {
 
         assert!(storage.import_item(&item).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_trims_image_file_path() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "image-with-spaced-path".to_string(),
+            item_type: "image".to_string(),
+            content: "data:image/png;base64,preview-data".to_string(),
+            preview: "data:image/png;base64,preview-data".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: Some("  C:\\Users\\clip\\image.png  ".to_string()),
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage
+            .get_item_by_id("image-with-spaced-path")
+            .unwrap()
+            .unwrap();
+        assert_eq!(imported.file_path.as_deref(), Some("C:\\Users\\clip\\image.png"));
     }
 
     #[test]
