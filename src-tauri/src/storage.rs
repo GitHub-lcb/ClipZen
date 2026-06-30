@@ -776,7 +776,12 @@ impl Storage {
         }
 
         let mut content = item.content.clone();
+        let mut preview = item.preview.clone();
         let mut file_path = item.file_path.as_deref().unwrap_or_default().to_string();
+
+        if item.item_type == "text" && preview.trim().is_empty() {
+            preview = content.chars().take(100).collect();
+        }
 
         if item.item_type == "files" {
             let file_paths = item.content.lines().map(str::to_string).collect::<Vec<_>>();
@@ -797,7 +802,7 @@ impl Storage {
                 &item.id,
                 &item.item_type,
                 &content,
-                &item.preview,
+                &preview,
                 if item.pinned { 1 } else { 0 },
                 if item.protected { 1 } else { 0 },
                 item.created_at,
@@ -1980,6 +1985,30 @@ mod tests {
 
         assert!(storage.import_item(&item).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_normalizes_blank_text_preview() {
+        let storage = memory_storage();
+        let content = "content with a generated preview".to_string();
+        let item = super::ClipboardItem {
+            id: "blank-preview".to_string(),
+            item_type: "text".to_string(),
+            content: content.clone(),
+            preview: "  \n\t".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage.get_item_by_id("blank-preview").unwrap().unwrap();
+        assert_eq!(imported.preview, content);
     }
 
     #[test]
