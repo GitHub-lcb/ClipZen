@@ -756,11 +756,17 @@ impl Storage {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
+        let mut content = item.content.clone();
+        let mut file_path = item.file_path.as_deref().unwrap_or_default().to_string();
+
         if item.item_type == "files" {
             let file_paths = item.content.lines().map(str::to_string).collect::<Vec<_>>();
-            if clean_file_paths(&file_paths).is_empty() {
+            let file_paths = clean_file_paths(&file_paths);
+            if file_paths.is_empty() {
                 return Err(rusqlite::Error::InvalidQuery);
             }
+            content = file_paths.join("\n");
+            file_path = file_paths.first().cloned().unwrap_or_default();
         }
 
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
@@ -771,12 +777,12 @@ impl Storage {
             params![
                 &item.id,
                 &item.item_type,
-                &item.content,
+                &content,
                 &item.preview,
                 if item.pinned { 1 } else { 0 },
                 if item.protected { 1 } else { 0 },
                 item.created_at,
-                item.file_path.as_deref().unwrap_or_default(),
+                &file_path,
                 &tags_json,
                 item.updated_at,
                 item.copy_count,
@@ -1831,5 +1837,38 @@ mod tests {
 
         assert!(storage.import_item(&item).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_normalizes_file_list_content() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "messy-files".to_string(),
+            item_type: "files".to_string(),
+            content: [
+                "  C:\\Users\\clip\\one.txt  ",
+                "",
+                "C:\\Users\\clip\\one.txt",
+                "C:\\Users\\clip\\two.txt  ",
+            ]
+            .join("\n"),
+            preview: "files".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage.get_item_by_id("messy-files").unwrap().unwrap();
+        assert_eq!(
+            imported.content,
+            "C:\\Users\\clip\\one.txt\nC:\\Users\\clip\\two.txt"
+        );
+        assert_eq!(imported.file_path.as_deref(), Some("C:\\Users\\clip\\one.txt"));
     }
 }
