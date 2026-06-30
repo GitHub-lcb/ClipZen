@@ -158,6 +158,10 @@ fn save_history_result(result: rusqlite::Result<String>) -> Result<String, Strin
     result.map_err(|e| e.to_string())
 }
 
+fn auto_cleanup_result(result: rusqlite::Result<usize>) -> Result<(), String> {
+    result.map(|_| ()).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -385,9 +389,7 @@ pub fn save_settings(
     
     if new_settings.auto_clear_after_days > 0 {
         let storage = storage.lock().unwrap();
-        if let Err(e) = storage.auto_cleanup(new_settings.auto_clear_after_days) {
-            eprintln!("Warning: Failed to cleanup: {}", e);
-        }
+        auto_cleanup_result(storage.auto_cleanup(new_settings.auto_clear_after_days))?;
     }
     
     Ok(())
@@ -861,6 +863,13 @@ mod tests {
     #[test]
     fn save_history_result_rejects_storage_errors() {
         let result = save_history_result(Err(rusqlite::Error::InvalidQuery));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn auto_cleanup_result_rejects_storage_errors() {
+        let result = auto_cleanup_result(Err(rusqlite::Error::InvalidQuery));
 
         assert!(result.is_err());
     }
