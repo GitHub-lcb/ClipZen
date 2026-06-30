@@ -102,6 +102,10 @@ fn storage_command_result(result: rusqlite::Result<()>) -> Result<(), String> {
     result.map_err(|e| e.to_string())
 }
 
+fn clipboard_command_result(result: Result<(), String>) -> Result<(), String> {
+    result
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -156,15 +160,21 @@ pub fn increment_copy_count(id: String, storage: State<Arc<Mutex<Storage>>>) -> 
 }
 
 #[tauri::command]
-pub fn copy_to_clipboard(content: String, clipboard: State<Arc<Mutex<ClipboardManager>>>) -> bool {
+pub fn copy_to_clipboard(
+    content: String,
+    clipboard: State<Arc<Mutex<ClipboardManager>>>,
+) -> Result<(), String> {
     let clipboard = clipboard.lock().unwrap();
-    clipboard.set_text(&content).is_ok()
+    clipboard_command_result(clipboard.set_text(&content))
 }
 
 #[tauri::command]
-pub fn copy_masked_content(content: String, clipboard: State<Arc<Mutex<ClipboardManager>>>) -> bool {
+pub fn copy_masked_content(
+    content: String,
+    clipboard: State<Arc<Mutex<ClipboardManager>>>,
+) -> Result<(), String> {
     let clipboard = clipboard.lock().unwrap();
-    clipboard.set_text(&content).is_ok()
+    clipboard_command_result(clipboard.set_text(&content))
 }
 
 /// 获取当前剪贴板内容（自动检测类型）
@@ -727,6 +737,13 @@ mod tests {
     #[test]
     fn storage_command_result_rejects_storage_errors() {
         let result = storage_command_result(Err(rusqlite::Error::QueryReturnedNoRows));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn clipboard_command_result_rejects_clipboard_errors() {
+        let result = clipboard_command_result(Err("clipboard unavailable".to_string()));
 
         assert!(result.is_err());
     }
