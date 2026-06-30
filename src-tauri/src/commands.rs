@@ -162,6 +162,10 @@ fn auto_cleanup_result(result: rusqlite::Result<usize>) -> Result<(), String> {
     result.map(|_| ()).map_err(|e| e.to_string())
 }
 
+fn autostart_result(result: Result<(), String>) -> Result<(), String> {
+    result
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -383,9 +387,7 @@ pub fn save_settings(
     settings.save(&new_settings)?;
     drop(settings);
     
-    if let Err(e) = handle_autostart(&app, new_settings.start_on_boot) {
-        eprintln!("Warning: Failed to set autostart: {}", e);
-    }
+    autostart_result(handle_autostart(&app, new_settings.start_on_boot))?;
     
     if new_settings.auto_clear_after_days > 0 {
         let storage = storage.lock().unwrap();
@@ -870,6 +872,13 @@ mod tests {
     #[test]
     fn auto_cleanup_result_rejects_storage_errors() {
         let result = auto_cleanup_result(Err(rusqlite::Error::InvalidQuery));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn autostart_result_rejects_autostart_errors() {
+        let result = autostart_result(Err("autostart unavailable".to_string()));
 
         assert!(result.is_err());
     }
