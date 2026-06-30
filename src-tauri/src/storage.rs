@@ -741,6 +741,13 @@ impl Storage {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
+        if item.item_type == "files" {
+            let file_paths = item.content.lines().map(str::to_string).collect::<Vec<_>>();
+            if clean_file_paths(&file_paths).is_empty() {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+        }
+
         let tags_json = serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string());
         self.conn.execute(
             "INSERT OR REPLACE INTO clipboard_items
@@ -1746,6 +1753,27 @@ mod tests {
             item_type: "unknown".to_string(),
             content: "content".to_string(),
             preview: "content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_rejects_blank_file_list_content() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "blank-files".to_string(),
+            item_type: "files".to_string(),
+            content: "  \n\t".to_string(),
+            preview: "".to_string(),
             pinned: false,
             protected: false,
             created_at: 100,
