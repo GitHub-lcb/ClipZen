@@ -589,7 +589,7 @@ impl Storage {
         }
 
         let Some(mut item) = self.get_item_by_id(id)? else {
-            return Ok(());
+            return Err(rusqlite::Error::QueryReturnedNoRows);
         };
 
         let original_len = item.tags.len();
@@ -1226,6 +1226,13 @@ mod tests {
         assert!(item.tags.is_empty());
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn removing_tag_from_missing_item_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage.remove_tag_from_item("missing-item", "work").is_err());
     }
 
     #[test]
