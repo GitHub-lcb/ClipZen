@@ -104,6 +104,26 @@ fn clean_file_paths(file_paths: &[String]) -> Vec<String> {
         .collect()
 }
 
+fn file_list_preview(file_paths: &[String]) -> String {
+    let preview = file_paths
+        .iter()
+        .take(3)
+        .map(|p| {
+            std::path::Path::new(p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| p.clone())
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if file_paths.len() > 3 {
+        format!("{}... ({} 个文件)", preview, file_paths.len())
+    } else {
+        preview
+    }
+}
+
 impl Storage {
     pub fn new() -> Result<Self> {
         // 将数据库存储在用户应用数据目录，避免触发 Tauri 文件监控
@@ -359,22 +379,7 @@ impl Storage {
         let id = Uuid::new_v4().to_string();
         
         // 生成预览：显示文件名列表
-        let preview: String = file_paths
-            .iter()
-            .take(3)
-            .map(|p| {
-                std::path::Path::new(p)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| p.clone())
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let preview = if file_paths.len() > 3 {
-            format!("{}... ({} 个文件)", preview, file_paths.len())
-        } else {
-            preview
-        };
+        let preview = file_list_preview(&file_paths);
         
         self.conn.execute(
             "INSERT OR REPLACE INTO clipboard_items (id, item_type, content, preview, pinned, protected, created_at, file_path, tags, content_hash)
@@ -788,6 +793,9 @@ impl Storage {
             let file_paths = clean_file_paths(&file_paths);
             if file_paths.is_empty() {
                 return Err(rusqlite::Error::InvalidQuery);
+            }
+            if preview.trim().is_empty() {
+                preview = file_list_preview(&file_paths);
             }
             content = file_paths.join("\n");
             file_path = file_paths.first().cloned().unwrap_or_default();
@@ -2105,5 +2113,35 @@ mod tests {
             "C:\\Users\\clip\\one.txt\nC:\\Users\\clip\\two.txt"
         );
         assert_eq!(imported.file_path.as_deref(), Some("C:\\Users\\clip\\one.txt"));
+    }
+
+    #[test]
+    fn import_item_normalizes_blank_file_list_preview() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "blank-files-preview".to_string(),
+            item_type: "files".to_string(),
+            content: [
+                "  C:\\Users\\clip\\one.txt  ",
+                "C:\\Users\\clip\\two.txt  ",
+            ]
+            .join("\n"),
+            preview: "  \n\t".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage
+            .get_item_by_id("blank-files-preview")
+            .unwrap()
+            .unwrap();
+        assert_eq!(imported.preview, "one.txt, two.txt");
     }
 }
