@@ -110,6 +110,10 @@ fn paginated_history_result(
     Ok((items, total_count))
 }
 
+fn tags_result(result: rusqlite::Result<Vec<String>>) -> Result<Vec<String>, String> {
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -433,9 +437,9 @@ pub fn clear_all_history(
 
 /// 获取所有标签
 #[tauri::command]
-pub fn get_all_tags(storage: State<Arc<Mutex<Storage>>>) -> Vec<String> {
+pub fn get_all_tags(storage: State<Arc<Mutex<Storage>>>) -> Result<Vec<String>, String> {
     let storage = storage.lock().unwrap();
-    storage.get_all_tags().unwrap_or_default()
+    tags_result(storage.get_all_tags())
 }
 
 /// 给记录添加标签
@@ -756,6 +760,13 @@ mod tests {
     fn paginated_history_result_rejects_storage_errors() {
         let settings = AppSettings::default();
         let result = paginated_history_result(Err(rusqlite::Error::InvalidQuery), &settings);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tags_result_rejects_storage_errors() {
+        let result = tags_result(Err(rusqlite::Error::InvalidQuery));
 
         assert!(result.is_err());
     }
