@@ -121,6 +121,18 @@ fn history_result(
     Ok(items)
 }
 
+fn tagged_items_result(
+    result: rusqlite::Result<Vec<crate::storage::ClipboardItem>>,
+    tag: &str,
+    settings: &AppSettings,
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
+    let items = history_result(result, settings)?;
+    Ok(items
+        .into_iter()
+        .filter(|item| item.tags.iter().any(|item_tag| item_tag == tag))
+        .collect())
+}
+
 fn tags_result(result: rusqlite::Result<Vec<String>>) -> Result<Vec<String>, String> {
     result.map_err(|e| e.to_string())
 }
@@ -517,17 +529,12 @@ pub fn get_items_by_tag(
     tag: String,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
-) -> Vec<crate::storage::ClipboardItem> {
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    if let Ok(mut items) = storage.get_all_items() {
-        decrypt_sensitive_items(&mut items, &app_settings);
-        items.into_iter().filter(|i| i.tags.contains(&tag)).collect()
-    } else {
-        Vec::new()
-    }
+    tagged_items_result(storage.get_all_items(), &tag, &app_settings)
 }
 
 /// 搜索剪贴板记录
@@ -796,6 +803,30 @@ mod tests {
         let result = history_result(Err(rusqlite::Error::InvalidQuery), &settings);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn tagged_items_result_rejects_storage_errors() {
+        let settings = AppSettings::default();
+        let result = tagged_items_result(Err(rusqlite::Error::InvalidQuery), "work", &settings);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tagged_items_result_filters_matching_tags() {
+        let settings = AppSettings::default();
+        let mut work_item = text_item("work-item", "content".to_string(), "content".to_string());
+        work_item.tags = vec!["work".to_string()];
+        let mut personal_item =
+            text_item("personal-item", "content".to_string(), "content".to_string());
+        personal_item.tags = vec!["personal".to_string()];
+
+        let result = tagged_items_result(Ok(vec![work_item, personal_item]), "work", &settings)
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "work-item");
     }
 
     #[test]
