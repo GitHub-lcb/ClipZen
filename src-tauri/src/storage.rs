@@ -788,6 +788,14 @@ impl Storage {
             preview = content.chars().take(100).collect();
         }
 
+        if item.item_type == "image" && preview.trim().is_empty() && !content.trim().is_empty() {
+            preview = content.clone();
+        }
+
+        if item.item_type == "image" && preview.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if item.item_type == "files" {
             let file_paths = item.content.lines().map(str::to_string).collect::<Vec<_>>();
             let file_paths = clean_file_paths(&file_paths);
@@ -2074,6 +2082,54 @@ mod tests {
             created_at: 100,
             updated_at: None,
             file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_uses_image_content_when_preview_is_blank() {
+        let storage = memory_storage();
+        let image_data_url = "data:image/png;base64,preview-data".to_string();
+        let item = super::ClipboardItem {
+            id: "image-blank-preview".to_string(),
+            item_type: "image".to_string(),
+            content: image_data_url.clone(),
+            preview: "  \n\t".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: Some("image.png".to_string()),
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        storage.import_item(&item).unwrap();
+
+        let imported = storage
+            .get_item_by_id("image-blank-preview")
+            .unwrap()
+            .unwrap();
+        assert_eq!(imported.preview, image_data_url);
+    }
+
+    #[test]
+    fn import_item_rejects_image_without_preview_or_content() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "image-without-preview".to_string(),
+            item_type: "image".to_string(),
+            content: "  \n\t".to_string(),
+            preview: "  \n\t".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: Some("image.png".to_string()),
             tags: Vec::new(),
             copy_count: 0,
         };
