@@ -737,6 +737,10 @@ impl Storage {
 
     /// 导入单条记录（用于批量导入）
     pub fn import_item(&self, item: &ClipboardItem) -> Result<()> {
+        if item.id.trim().is_empty() {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if !matches!(item.item_type.as_str(), "text" | "image" | "files") {
             return Err(rusqlite::Error::InvalidQuery);
         }
@@ -1753,6 +1757,27 @@ mod tests {
         let imported = storage.get_item_by_id("imported").unwrap().unwrap();
         assert_eq!(imported.updated_at, Some(200));
         assert_eq!(imported.copy_count, 7);
+    }
+
+    #[test]
+    fn import_item_rejects_blank_id() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "  \n\t".to_string(),
+            item_type: "text".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
     }
 
     #[test]
