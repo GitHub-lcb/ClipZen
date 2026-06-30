@@ -29,17 +29,12 @@ pub fn get_clipboard_history_paginated(
     page_size: u32,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
-) -> (Vec<crate::storage::ClipboardItem>, u32) {
+) -> Result<(Vec<crate::storage::ClipboardItem>, u32), String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    let (mut items, total_count) = storage
-        .get_items_paginated(page, page_size)
-        .unwrap_or_else(|_| (Vec::new(), 0));
-    decrypt_sensitive_items(&mut items, &app_settings);
-    
-    (items, total_count)
+    paginated_history_result(storage.get_items_paginated(page, page_size), &app_settings)
 }
 
 #[tauri::command]
@@ -104,6 +99,15 @@ fn storage_command_result(result: rusqlite::Result<()>) -> Result<(), String> {
 
 fn clipboard_command_result(result: Result<(), String>) -> Result<(), String> {
     result
+}
+
+fn paginated_history_result(
+    result: rusqlite::Result<(Vec<crate::storage::ClipboardItem>, u32)>,
+    settings: &AppSettings,
+) -> Result<(Vec<crate::storage::ClipboardItem>, u32), String> {
+    let (mut items, total_count) = result.map_err(|e| e.to_string())?;
+    decrypt_sensitive_items(&mut items, settings);
+    Ok((items, total_count))
 }
 
 #[tauri::command]
@@ -744,6 +748,14 @@ mod tests {
     #[test]
     fn clipboard_command_result_rejects_clipboard_errors() {
         let result = clipboard_command_result(Err("clipboard unavailable".to_string()));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn paginated_history_result_rejects_storage_errors() {
+        let settings = AppSettings::default();
+        let result = paginated_history_result(Err(rusqlite::Error::InvalidQuery), &settings);
 
         assert!(result.is_err());
     }
