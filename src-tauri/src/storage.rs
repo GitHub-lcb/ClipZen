@@ -801,6 +801,13 @@ impl Storage {
 
     /// 批量导入记录，任意一条失败时回滚整批。
     pub fn import_items(&self, items: &[ClipboardItem]) -> Result<usize> {
+        let mut imported_ids = HashSet::new();
+        for item in items {
+            if !imported_ids.insert(item.id.as_str()) {
+                return Err(rusqlite::Error::InvalidQuery);
+            }
+        }
+
         self.conn.execute_batch("BEGIN IMMEDIATE TRANSACTION")?;
 
         let result = (|| {
@@ -1864,6 +1871,40 @@ mod tests {
         };
 
         assert!(storage.import_items(&[valid, invalid]).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_items_rejects_duplicate_ids_in_same_batch() {
+        let storage = memory_storage();
+        let first = super::ClipboardItem {
+            id: "duplicate-import".to_string(),
+            item_type: "text".to_string(),
+            content: "first content".to_string(),
+            preview: "first content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+        let second = super::ClipboardItem {
+            id: "duplicate-import".to_string(),
+            item_type: "text".to_string(),
+            content: "second content".to_string(),
+            preview: "second content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 200,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: 0,
+        };
+
+        assert!(storage.import_items(&[first, second]).is_err());
         assert!(storage.get_all_items().unwrap().is_empty());
     }
 
