@@ -550,10 +550,13 @@ impl Storage {
     }
 
     pub fn toggle_protected(&self, id: &str) -> Result<()> {
-        self.conn.execute(
+        let updated = self.conn.execute(
             "UPDATE clipboard_items SET protected = NOT protected, updated_at = ?1 WHERE id = ?2",
             params![Utc::now().timestamp_millis(), id],
         )?;
+        if updated == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
         Ok(())
     }
 
@@ -1314,6 +1317,13 @@ mod tests {
         assert!(item.protected);
         assert!(item.updated_at.is_some());
         assert!(item.updated_at.unwrap() >= item.created_at);
+    }
+
+    #[test]
+    fn toggling_missing_item_protected_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage.toggle_protected("missing-item").is_err());
     }
 
     #[test]
