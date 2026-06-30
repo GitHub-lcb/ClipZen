@@ -303,7 +303,8 @@ impl Storage {
 
     /// 保存图片剪贴板
     pub fn save_image_item(&self, _image_data: &[u8], preview_base64: &str, file_path: &str, content_hash: &str) -> Result<String> {
-        if file_path.trim().is_empty() {
+        let file_path = file_path.trim();
+        if file_path.is_empty() {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
@@ -1684,6 +1685,23 @@ mod tests {
         assert!(image_path.exists());
         std::fs::remove_file(&image_path).ok();
         std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn saving_image_trims_file_path() {
+        let storage = memory_storage();
+
+        storage
+            .save_image_item(
+                &[1],
+                "preview",
+                "  C:\\Users\\clip\\image.png  ",
+                "trimmed-image-hash",
+            )
+            .unwrap();
+
+        let items = storage.get_all_items().unwrap();
+        assert_eq!(items[0].file_path.as_deref(), Some("C:\\Users\\clip\\image.png"));
     }
 
     #[test]
