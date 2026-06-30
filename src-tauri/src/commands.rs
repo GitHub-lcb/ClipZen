@@ -114,6 +114,15 @@ fn tags_result(result: rusqlite::Result<Vec<String>>) -> Result<Vec<String>, Str
     result.map_err(|e| e.to_string())
 }
 
+fn search_history_result(
+    result: rusqlite::Result<Vec<crate::storage::ClipboardItem>>,
+    query: &str,
+    settings: &AppSettings,
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
+    let items = result.map_err(|e| e.to_string())?;
+    Ok(filter_items_for_search(items, query, settings))
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -506,16 +515,12 @@ pub fn search_clipboard_history(
     query: String,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
-) -> Vec<crate::storage::ClipboardItem> {
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
-    
-    if let Ok(items) = storage.get_all_items() {
-        filter_items_for_search(items, &query, &app_settings)
-    } else {
-        Vec::new()
-    }
+
+    search_history_result(storage.get_all_items(), &query, &app_settings)
 }
 
 /// 设置开机自启
@@ -767,6 +772,14 @@ mod tests {
     #[test]
     fn tags_result_rejects_storage_errors() {
         let result = tags_result(Err(rusqlite::Error::InvalidQuery));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn search_history_result_rejects_storage_errors() {
+        let settings = AppSettings::default();
+        let result = search_history_result(Err(rusqlite::Error::InvalidQuery), "query", &settings);
 
         assert!(result.is_err());
     }
