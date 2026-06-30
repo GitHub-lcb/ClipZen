@@ -13,14 +13,15 @@ use std::fs;
 use std::path::PathBuf;
 
 #[tauri::command]
-pub fn get_clipboard_history(storage: State<Arc<Mutex<Storage>>>, settings: State<Arc<Mutex<SettingsManager>>>) -> Vec<crate::storage::ClipboardItem> {
+pub fn get_clipboard_history(
+    storage: State<Arc<Mutex<Storage>>>,
+    settings: State<Arc<Mutex<SettingsManager>>>,
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    let mut items = storage.get_all_items().unwrap_or_default();
-    decrypt_sensitive_items(&mut items, &app_settings);
-    items
+    history_result(storage.get_all_items(), &app_settings)
 }
 
 #[tauri::command]
@@ -43,14 +44,15 @@ pub fn get_clipboard_history_sorted(
     sort_order: String,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
-) -> Vec<crate::storage::ClipboardItem> {
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
     
-    let mut items = storage.get_items_sorted(&sort_by, &sort_order).unwrap_or_default();
-    decrypt_sensitive_items(&mut items, &app_settings);
-    items
+    history_result(
+        storage.get_items_sorted(&sort_by, &sort_order),
+        &app_settings,
+    )
 }
 
 /// 解密敏感信息
@@ -108,6 +110,15 @@ fn paginated_history_result(
     let (mut items, total_count) = result.map_err(|e| e.to_string())?;
     decrypt_sensitive_items(&mut items, settings);
     Ok((items, total_count))
+}
+
+fn history_result(
+    result: rusqlite::Result<Vec<crate::storage::ClipboardItem>>,
+    settings: &AppSettings,
+) -> Result<Vec<crate::storage::ClipboardItem>, String> {
+    let mut items = result.map_err(|e| e.to_string())?;
+    decrypt_sensitive_items(&mut items, settings);
+    Ok(items)
 }
 
 fn tags_result(result: rusqlite::Result<Vec<String>>) -> Result<Vec<String>, String> {
@@ -775,6 +786,14 @@ mod tests {
     fn paginated_history_result_rejects_storage_errors() {
         let settings = AppSettings::default();
         let result = paginated_history_result(Err(rusqlite::Error::InvalidQuery), &settings);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn history_result_rejects_storage_errors() {
+        let settings = AppSettings::default();
+        let result = history_result(Err(rusqlite::Error::InvalidQuery), &settings);
 
         assert!(result.is_err());
     }
