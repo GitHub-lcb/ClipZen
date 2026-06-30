@@ -28,14 +28,21 @@ pub fn get_clipboard_history(
 pub fn get_clipboard_history_paginated(
     page: u32,
     page_size: u32,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
     storage: State<Arc<Mutex<Storage>>>,
     settings: State<Arc<Mutex<SettingsManager>>>,
 ) -> Result<(Vec<crate::storage::ClipboardItem>, u32), String> {
     let storage = storage.lock().unwrap();
     let settings_manager = settings.lock().unwrap();
     let app_settings = settings_manager.load();
+    let sort_by = sort_by.as_deref().unwrap_or("time");
+    let sort_order = sort_order.as_deref().unwrap_or("desc");
     
-    paginated_history_result(storage.get_items_paginated(page, page_size), &app_settings)
+    paginated_history_result(
+        storage.get_items_paginated_sorted(page, page_size, sort_by, sort_order),
+        &app_settings,
+    )
 }
 
 #[tauri::command]

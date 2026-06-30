@@ -13,7 +13,12 @@ import {
   Check, Clock, Loader2, Info, Lock, Shield, FolderOpen, X, 
   ArrowUpDown, ArrowUp, ArrowDown, ChevronUp, ChevronDown 
 } from "lucide-react";
-import { useClipboard, ClipboardItem } from "@/hooks/useClipboard";
+import {
+  useClipboard,
+  ClipboardItem,
+  ClipboardSortBy,
+  ClipboardSortOrder,
+} from "@/hooks/useClipboard";
 import { useI18n } from "@/hooks/useI18n";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { TagManager } from "@/components/TagManager";
@@ -97,8 +102,8 @@ function App() {
   const [unlockedItems, setUnlockedItems] = useState<Set<string>>(new Set());
   const [enablePasswordProtection, setEnablePasswordProtection] = useState(false);
   const [enableMaskedCopy, setEnableMaskedCopy] = useState(false);
-  const [sortBy, setSortBy] = useState<"time" | "type" | "content" | "popularity">("time");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<ClipboardSortBy>("time");
+  const [sortOrder, setSortOrder] = useState<ClipboardSortOrder>("desc");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [licenseDialogOpen, setLicenseDialogOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
@@ -119,7 +124,7 @@ function App() {
     togglePin,
     refresh,
     verifyPassword,
-  } = useClipboard();
+  } = useClipboard(sortBy, sortOrder);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const activeSearchQuery = searchQuery.trim() ? deferredSearchQuery : searchQuery;
   const isSearching = searchQuery.trim().length > 0;
@@ -844,7 +849,7 @@ function App() {
                           if (sortBy === option.key) {
                             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
                           } else {
-                            setSortBy(option.key as "time" | "type" | "content" | "popularity");
+                            setSortBy(option.key as ClipboardSortBy);
                             setSortOrder("desc");
                           }
                           setShowSortMenu(false);

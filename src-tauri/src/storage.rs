@@ -124,6 +124,32 @@ fn file_list_preview(file_paths: &[String]) -> String {
     }
 }
 
+fn item_order_clause(sort_by: &str, sort_order: &str) -> &'static str {
+    match (sort_by, sort_order) {
+        ("time", "asc") => "ORDER BY pinned DESC, created_at ASC",
+        ("time", "desc") => "ORDER BY pinned DESC, created_at DESC",
+        ("type", "asc") => {
+            "ORDER BY pinned DESC, CASE item_type WHEN 'image' THEN 0 WHEN 'text' THEN 1 WHEN 'files' THEN 2 ELSE 1 END ASC, created_at DESC"
+        }
+        ("type", "desc") => {
+            "ORDER BY pinned DESC, CASE item_type WHEN 'image' THEN 0 WHEN 'text' THEN 1 WHEN 'files' THEN 2 ELSE 1 END DESC, created_at DESC"
+        }
+        ("content", "asc") => {
+            "ORDER BY pinned DESC, CASE WHEN item_type = 'image' THEN '' ELSE lower(COALESCE(NULLIF(preview, ''), content)) END ASC, created_at DESC"
+        }
+        ("content", "desc") => {
+            "ORDER BY pinned DESC, CASE WHEN item_type = 'image' THEN '' ELSE lower(COALESCE(NULLIF(preview, ''), content)) END DESC, created_at DESC"
+        }
+        ("popularity", "asc") => {
+            "ORDER BY pinned DESC, COALESCE(updated_at, created_at) ASC, COALESCE(copy_count, 0) ASC, created_at DESC"
+        }
+        ("popularity", "desc") => {
+            "ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, COALESCE(copy_count, 0) DESC, created_at DESC"
+        }
+        _ => "ORDER BY pinned DESC, created_at DESC",
+    }
+}
+
 impl Storage {
     pub fn new() -> Result<Self> {
         // 将数据库存储在用户应用数据目录，避免触发 Tauri 文件监控
@@ -468,7 +494,14 @@ impl Storage {
         Ok(tags)
     }
 
-    pub fn get_items_paginated(&self, page: u32, page_size: u32) -> Result<(Vec<ClipboardItem>, u32)> {
+    /// 获取排序后的记录
+    pub fn get_items_paginated_sorted(
+        &self,
+        page: u32,
+        page_size: u32,
+        sort_by: &str,
+        sort_order: &str,
+    ) -> Result<(Vec<ClipboardItem>, u32)> {
         let total_count: u32 = self.conn.query_row(
             "SELECT COUNT(*) FROM clipboard_items",
             [],
@@ -478,14 +511,16 @@ impl Storage {
         let safe_page = page.max(1);
         let safe_page_size = page_size.clamp(1, 200);
         let offset = u64::from(safe_page - 1) * u64::from(safe_page_size);
-
-        let mut stmt = self.conn.prepare(
+        let order_clause = item_order_clause(sort_by, sort_order);
+        let sql = format!(
             "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0)
              FROM clipboard_items
-             ORDER BY pinned DESC, created_at DESC
-             LIMIT ?1 OFFSET ?2"
-        )?;
+             {}
+             LIMIT ?1 OFFSET ?2",
+            order_clause
+        );
 
+        let mut stmt = self.conn.prepare(&sql)?;
         let items = stmt.query_map([i64::from(safe_page_size), offset as i64], clipboard_item_from_row)?;
 
         let mut result = Vec::new();
@@ -496,19 +531,8 @@ impl Storage {
         Ok((result, total_count))
     }
 
-    /// 获取排序后的记录
     pub fn get_items_sorted(&self, sort_by: &str, sort_order: &str) -> Result<Vec<ClipboardItem>> {
-        let order_clause = match (sort_by, sort_order) {
-            ("time", "asc") => "ORDER BY pinned DESC, created_at ASC",
-            ("time", "desc") => "ORDER BY pinned DESC, created_at DESC",
-            ("type", "asc") => "ORDER BY pinned DESC, item_type ASC, created_at DESC",
-            ("type", "desc") => "ORDER BY pinned DESC, item_type DESC, created_at DESC",
-            ("content", "asc") => "ORDER BY pinned DESC, preview ASC, created_at DESC",
-            ("content", "desc") => "ORDER BY pinned DESC, preview DESC, created_at DESC",
-            ("popularity", "asc") => "ORDER BY pinned DESC, COALESCE(updated_at, created_at) ASC, COALESCE(copy_count, 0) ASC, created_at DESC",
-            ("popularity", "desc") => "ORDER BY pinned DESC, COALESCE(updated_at, created_at) DESC, COALESCE(copy_count, 0) DESC, created_at DESC",
-            _ => "ORDER BY pinned DESC, created_at DESC",
-        };
+        let order_clause = item_order_clause(sort_by, sort_order);
 
         let sql = format!(
             "SELECT id, item_type, content, preview, pinned, protected, created_at, file_path, tags, updated_at, COALESCE(copy_count, 0) 
@@ -1526,6 +1550,71 @@ mod tests {
     }
 
     #[test]
+    fn paginated_sort_orders_before_limiting_results() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES
+             ('newest', 'text', 'zulu', 'zulu', 0, 0, 3000, '', '[]'),
+             ('middle', 'text', 'mike', 'mike', 0, 0, 2000, '', '[]'),
+             ('oldest', 'text', 'alpha', 'alpha', 0, 0, 1000, '', '[]')",
+            [],
+        ).unwrap();
+
+        let (items, total_count) = storage
+            .get_items_paginated_sorted(1, 1, "content", "asc")
+            .unwrap();
+
+        assert_eq!(total_count, 3);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "oldest");
+    }
+
+    #[test]
+    fn paginated_type_sort_matches_ui_order_before_limiting_results() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES
+             ('file-item', 'files', 'C:\\Users\\clip\\doc.txt', 'doc.txt', 0, 0, 3000, 'C:\\Users\\clip\\doc.txt', '[]'),
+             ('text-item', 'text', 'note', 'note', 0, 0, 2000, '', '[]'),
+             ('image-item', 'image', '', 'image-preview', 0, 0, 1000, 'image.png', '[]')",
+            [],
+        ).unwrap();
+
+        let (items, total_count) = storage
+            .get_items_paginated_sorted(1, 1, "type", "asc")
+            .unwrap();
+
+        assert_eq!(total_count, 3);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "image-item");
+    }
+
+    #[test]
+    fn paginated_content_sort_treats_images_like_ui_before_limiting_results() {
+        let storage = memory_storage();
+        storage.conn.execute(
+            "INSERT INTO clipboard_items
+             (id, item_type, content, preview, pinned, protected, created_at, file_path, tags)
+             VALUES
+             ('text-item', 'text', 'alpha', 'alpha', 0, 0, 2000, '', '[]'),
+             ('image-item', 'image', '', 'zzzz-preview', 0, 0, 1000, 'image.png', '[]')",
+            [],
+        ).unwrap();
+
+        let (items, total_count) = storage
+            .get_items_paginated_sorted(1, 1, "content", "asc")
+            .unwrap();
+
+        assert_eq!(total_count, 2);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "image-item");
+    }
+
+    #[test]
     fn deleting_image_item_removes_cached_file() {
         let storage = memory_storage();
         let temp_dir = std::env::temp_dir().join(format!(
@@ -1826,7 +1915,9 @@ mod tests {
         let storage = memory_storage();
         storage.save_clipboard_item("content").unwrap();
 
-        let (items, total_count) = storage.get_items_paginated(u32::MAX, 200).unwrap();
+        let (items, total_count) = storage
+            .get_items_paginated_sorted(u32::MAX, 200, "time", "desc")
+            .unwrap();
 
         assert!(items.is_empty());
         assert_eq!(total_count, 1);

@@ -16,6 +16,9 @@ export interface ClipboardItem {
   copy_count?: number;
 }
 
+export type ClipboardSortBy = "time" | "type" | "content" | "popularity";
+export type ClipboardSortOrder = "asc" | "desc";
+
 const PAGE_SIZE = 50;
 
 function appendUniqueItems(items: ClipboardItem[], incoming: ClipboardItem[]) {
@@ -31,7 +34,10 @@ function appendUniqueItems(items: ClipboardItem[], incoming: ClipboardItem[]) {
   return uniqueIncoming.length === 0 ? items : [...items, ...uniqueIncoming];
 }
 
-export function useClipboard() {
+export function useClipboard(
+  sortBy: ClipboardSortBy = "time",
+  sortOrder: ClipboardSortOrder = "desc"
+) {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
@@ -57,7 +63,9 @@ export function useClipboard() {
       
       const [result, total] = await invoke<[ClipboardItem[], number]>("get_clipboard_history_paginated", {
         page,
-        page_size: PAGE_SIZE
+        page_size: PAGE_SIZE,
+        sort_by: sortBy,
+        sort_order: sortOrder,
       });
 
       if (requestVersion !== requestVersionRef.current) {
@@ -94,7 +102,7 @@ export function useClipboard() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [sortBy, sortOrder]);
 
   // 加载更多数据
   const loadMore = useCallback(() => {
