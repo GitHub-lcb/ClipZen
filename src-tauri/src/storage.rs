@@ -526,10 +526,13 @@ impl Storage {
             .optional()?
             .flatten();
 
-        self.conn.execute(
+        let deleted = self.conn.execute(
             "DELETE FROM clipboard_items WHERE id = ?1",
             [id],
         )?;
+        if deleted == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
 
         if let Some(path) = file_to_delete {
             std::fs::remove_file(path).ok();
@@ -1380,6 +1383,13 @@ mod tests {
 
         assert!(!image_path.exists());
         std::fs::remove_dir(&temp_dir).ok();
+    }
+
+    #[test]
+    fn deleting_missing_item_returns_error() {
+        let storage = memory_storage();
+
+        assert!(storage.delete_item("missing-item").is_err());
     }
 
     #[test]
