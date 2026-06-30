@@ -741,6 +741,10 @@ impl Storage {
             return Err(rusqlite::Error::InvalidQuery);
         }
 
+        if item.copy_count < 0 {
+            return Err(rusqlite::Error::InvalidQuery);
+        }
+
         if !matches!(item.item_type.as_str(), "text" | "image" | "files") {
             return Err(rusqlite::Error::InvalidQuery);
         }
@@ -1774,6 +1778,27 @@ mod tests {
             file_path: None,
             tags: Vec::new(),
             copy_count: 0,
+        };
+
+        assert!(storage.import_item(&item).is_err());
+        assert!(storage.get_all_items().unwrap().is_empty());
+    }
+
+    #[test]
+    fn import_item_rejects_negative_copy_count() {
+        let storage = memory_storage();
+        let item = super::ClipboardItem {
+            id: "negative-copy-count".to_string(),
+            item_type: "text".to_string(),
+            content: "content".to_string(),
+            preview: "content".to_string(),
+            pinned: false,
+            protected: false,
+            created_at: 100,
+            updated_at: None,
+            file_path: None,
+            tags: Vec::new(),
+            copy_count: -1,
         };
 
         assert!(storage.import_item(&item).is_err());
