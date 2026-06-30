@@ -127,6 +127,10 @@ fn clear_history_delete_result(result: rusqlite::Result<()>) -> Result<(), Strin
     result.map_err(|e| e.to_string())
 }
 
+fn import_item_result(result: rusqlite::Result<()>) -> Result<(), String> {
+    result.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn save_to_history(
     content: String,
@@ -406,7 +410,7 @@ pub fn import_history(
     let mut count = 0;
     
     for item in items {
-        let _ = storage.import_item(&item);
+        import_item_result(storage.import_item(&item))?;
         count += 1;
     }
     
@@ -785,6 +789,13 @@ mod tests {
     #[test]
     fn clear_history_delete_result_rejects_storage_errors() {
         let result = clear_history_delete_result(Err(rusqlite::Error::QueryReturnedNoRows));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_item_result_rejects_storage_errors() {
+        let result = import_item_result(Err(rusqlite::Error::InvalidQuery));
 
         assert!(result.is_err());
     }
